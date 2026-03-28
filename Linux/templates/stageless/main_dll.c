@@ -17,7 +17,7 @@ unsigned char payload[] = {
 };
 
 
-extern __declspec(dllexport) int ctf()
+extern __declspec(dllexport) int af()
 {
 
     SIZE_T		sEncPayload			= sizeof(payload);
