@@ -47,7 +47,7 @@ This repository was created to facilitate AV/EDR evasion during CTFs and red tea
 
 Your shellcode hides better than Anne Frank in the annex – until some nosy neighbor (Defender) rats it out.
 
-Check out my blog post for more infos: [Evade Modern AVs in 2025](#)
+Check out my blog post for more infos: [Evade Modern AVs in 2026](#)
 
 ## General Information
 
@@ -223,10 +223,10 @@ Example usage: python main.py stageless -p shellcode.bin -o shellcode -e -s -pfx
 
 In both cases, staged or stageless, you can choose whether to compile your loader as an EXE or a DLL. To compile it as a DLL, simply append `-f DLL`. By default, it compiles as an EXE, though you can also explicitly specify this using -f EXE (but you don't need to).
 
-The DLL version exports a function called `ctf`. This is the function you need to call to start the exection. 
+The DLL version exports a function called `af`. This is the function you need to call to start the exection. 
 
 ```powershell
-rundll32.exe afloader.dll,ctf
+rundll32.exe afloader.dll,af
 ```
 
 ### Staged
