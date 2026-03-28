@@ -1,7 +1,7 @@
 /*
 
 Original Implementation: https://github.com/halloweeks/AES-128-CBC
-Modifications from MochaByte to handle data of any size.
+Modifications from Excalibra to handle data of any size.
 
 MIT License
 
