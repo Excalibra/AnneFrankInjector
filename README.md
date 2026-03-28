@@ -189,6 +189,7 @@ afpacker staged -p beacon.bin -i 10.0.0.5 -po 80 -pa /payload.bin -f DLL -o beac
 - [x] Setup.py / pipx support
 - [ ] More injection techniques (maybe "Betrayed by Neighbor" self-delete)
 - [ ] AMSI / ETW bypass (because even the diary needs silencing)
+- [ ] Persistence features
 
 ## Detections
 
