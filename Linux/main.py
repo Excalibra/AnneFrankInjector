@@ -45,6 +45,7 @@ def main():
     parser_stageless.add_argument("-s", "--scramble", action="store_true", help="Scramble the loader's functions and variables.")
     parser_stageless.add_argument("-pfx", "--pfx", type=str, help="Path to the PFX file for signing the loader.")
     parser_stageless.add_argument("-pfx-pass", "--pfx-password", type=str, help="Password for the PFX file.")
+    parser_stageless.add_argument("-o", "--output", type=str, help="Output name for the generated loader (without extension).")
 
     parser_stageless.epilog = "Example usage: python main.py stageless -p shellcode.bin -e -s -pfx cert.pfx -pfx-pass 'password'"
 
@@ -671,6 +672,9 @@ def main():
 
                 print(Colors.green("[+] Loader scrambled !"))
 
+            # ----- Use custom output name if provided -----
+            output_name = args.output if args.output else "afloader"
+
             if args.format is None or args.format == "EXE":
                 if args.pfx:
 
@@ -689,14 +693,14 @@ def main():
                         print(Colors.red("[!] PFX password not provided"))
                         sys.exit(1)
 
-                    input_binary = "afloader.exe"
-                    signed_binary = "afloader_signed.exe"
+                    input_binary = f"{output_name}.exe"
+                    signed_binary = f"{output_name}_signed.exe"
 
                     os.system(f"cd '{dst_directory}' && make clean && make FORMAT=EXE")
-                    shutil.move(f"{dst_directory}/afloader.exe", f"afloader.exe")
+                    shutil.move(f"{dst_directory}/afloader.exe", input_binary)
 
-                    if os.path.exists("afloader_signed.exe"):
-                        os.remove("afloader_signed.exe")
+                    if os.path.exists(signed_binary):
+                        os.remove(signed_binary)
 
                     subprocess.run([
                         f"osslsigncode",
@@ -718,7 +722,7 @@ def main():
                     
                     os.system(f"cd '{dst_directory}' && make clean && make FORMAT=EXE")
 
-                    shutil.move(f"{dst_directory}/afloader.exe", f"afloader.exe")
+                    shutil.move(f"{dst_directory}/afloader.exe", f"{output_name}.exe")
 
                     shutil.rmtree(dst_directory)
 
@@ -732,7 +736,7 @@ def main():
 
                 os.system(f"cd '{dst_directory}' && make clean && make FORMAT=DLL")
 
-                shutil.move(f"{dst_directory}/afloader.dll", f"afloader.dll")
+                shutil.move(f"{dst_directory}/afloader.dll", f"{output_name}.dll")
 
                 shutil.rmtree(dst_directory)
 
