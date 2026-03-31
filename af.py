@@ -14,227 +14,181 @@ class AnneFrankGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("AnneFrankInjector - GUI")
-        self.root.geometry("720x720")  # slightly taller to accommodate new controls
+        self.root.geometry("780x880")  # increased height for new controls
 
-        # Determine which backend to use
-        self.os_name = platform.system()
-        if self.os_name == "Windows":
-            self.backend = os.path.join("Windows", "main.py")
-            self.certs_dir = os.path.join("Windows", "custom_certs")
+        # Determine backend path (absolute)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        if platform.system() == "Windows":
+            self.backend = os.path.join(script_dir, "Windows", "main.py")
         else:
-            self.backend = os.path.join("Linux", "main.py")
-            self.certs_dir = os.path.join("Linux", "custom_certs")
+            self.backend = os.path.join(script_dir, "Linux", "main.py")
 
         if not os.path.isfile(self.backend):
-            messagebox.showerror("Error", f"Backend not found: {self.backend}\nMake sure you are in the root directory of AnneFrankInjector.")
+            messagebox.showerror("Error", f"Backend not found: {self.backend}")
             sys.exit(1)
 
-        # ========== Main frame ==========
-        main_frame = ttk.Frame(root, padding=10)
+        main_frame = ttk.Frame(root, padding=12)
         main_frame.grid(row=0, column=0, sticky="nsew")
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
         # ---------- Shellcode file ----------
-        ttk.Label(main_frame, text="Shellcode file:").grid(row=0, column=0, sticky="w")
+        row = 0
+        ttk.Label(main_frame, text="Shellcode file:").grid(row=row, column=0, sticky="w")
         self.shellcode_path = tk.StringVar()
-        ttk.Entry(main_frame, textvariable=self.shellcode_path, width=50).grid(row=0, column=1)
-        ttk.Button(main_frame, text="Browse", command=self.browse_shellcode).grid(row=0, column=2)
+        ttk.Entry(main_frame, textvariable=self.shellcode_path, width=60).grid(row=row, column=1, columnspan=2, sticky="ew")
+        ttk.Button(main_frame, text="Browse", command=self.browse_shellcode).grid(row=row, column=3)
+        row += 1
 
         # ---------- Mode ----------
-        ttk.Label(main_frame, text="Mode:").grid(row=1, column=0, sticky="w")
+        ttk.Label(main_frame, text="Mode:").grid(row=row, column=0, sticky="w")
         self.mode = tk.StringVar(value="stageless")
-        ttk.Radiobutton(main_frame, text="Stageless", variable=self.mode, value="stageless").grid(row=1, column=1, sticky="w")
-        ttk.Radiobutton(main_frame, text="Staged", variable=self.mode, value="staged").grid(row=1, column=2, sticky="w")
+        ttk.Radiobutton(main_frame, text="Stageless", variable=self.mode, value="stageless").grid(row=row, column=1, sticky="w")
+        ttk.Radiobutton(main_frame, text="Staged", variable=self.mode, value="staged").grid(row=row, column=2, sticky="w")
+        row += 1
 
-        # ---------- Staged settings (initially hidden) ----------
+        # ---------- Staged settings (hidden initially) ----------
         self.staged_frame = ttk.LabelFrame(main_frame, text="Staged Settings")
-        self.staged_frame.grid(row=2, column=0, columnspan=3, sticky="ew", pady=5)
+        self.staged_frame.grid(row=row, column=0, columnspan=4, sticky="ew", pady=6)
         self.staged_frame.grid_remove()
-
-        ttk.Label(self.staged_frame, text="IP address:").grid(row=0, column=0, sticky="w")
+        staged_row = 0
+        ttk.Label(self.staged_frame, text="IP:").grid(row=staged_row, column=0, sticky="w")
         self.ip = tk.StringVar()
-        ttk.Entry(self.staged_frame, textvariable=self.ip).grid(row=0, column=1, padx=5, pady=2)
-
-        ttk.Label(self.staged_frame, text="Port:").grid(row=1, column=0, sticky="w")
+        ttk.Entry(self.staged_frame, textvariable=self.ip, width=20).grid(row=staged_row, column=1, padx=5)
+        staged_row += 1
+        ttk.Label(self.staged_frame, text="Port:").grid(row=staged_row, column=0, sticky="w")
         self.port = tk.StringVar()
-        ttk.Entry(self.staged_frame, textvariable=self.port).grid(row=1, column=1, padx=5, pady=2)
-
-        ttk.Label(self.staged_frame, text="Path:").grid(row=2, column=0, sticky="w")
+        ttk.Entry(self.staged_frame, textvariable=self.port, width=10).grid(row=staged_row, column=1, padx=5)
+        staged_row += 1
+        ttk.Label(self.staged_frame, text="Path:").grid(row=staged_row, column=0, sticky="w")
         self.path = tk.StringVar(value="/")
-        ttk.Entry(self.staged_frame, textvariable=self.path).grid(row=2, column=1, padx=5, pady=2)
+        ttk.Entry(self.staged_frame, textvariable=self.path, width=30).grid(row=staged_row, column=1, padx=5)
+        # increase main row after staged_frame
+        row += 1
 
         # ---------- Common options ----------
-        self.encrypt = tk.BooleanVar()
-        ttk.Checkbutton(main_frame, text="Encrypt shellcode (AES-128-CBC)", variable=self.encrypt).grid(row=3, column=0, columnspan=3, sticky="w")
+        self.encrypt = tk.BooleanVar(value=True)
+        ttk.Checkbutton(main_frame, text="Encrypt shellcode", variable=self.encrypt).grid(row=row, column=0, columnspan=4, sticky="w")
+        row += 1
 
-        self.scramble = tk.BooleanVar()
-        ttk.Checkbutton(main_frame, text="Scramble function/variable names", variable=self.scramble).grid(row=4, column=0, columnspan=3, sticky="w")
+        self.scramble = tk.BooleanVar(value=True)
+        ttk.Checkbutton(main_frame, text="Scramble names", variable=self.scramble).grid(row=row, column=0, columnspan=4, sticky="w")
+        row += 1
 
         # ---------- Format ----------
-        ttk.Label(main_frame, text="Output format:").grid(row=5, column=0, sticky="w")
+        ttk.Label(main_frame, text="Format:").grid(row=row, column=0, sticky="w")
         self.format = tk.StringVar(value="EXE")
-        ttk.Radiobutton(main_frame, text="EXE", variable=self.format, value="EXE").grid(row=5, column=1, sticky="w")
-        ttk.Radiobutton(main_frame, text="DLL", variable=self.format, value="DLL").grid(row=5, column=2, sticky="w")
+        ttk.Radiobutton(main_frame, text="EXE", variable=self.format, value="EXE").grid(row=row, column=1, sticky="w")
+        ttk.Radiobutton(main_frame, text="DLL", variable=self.format, value="DLL").grid(row=row, column=2, sticky="w")
+        row += 1
 
         # ---------- APC target ----------
-        ttk.Label(main_frame, text="APC injection target:").grid(row=6, column=0, sticky="w")
+        ttk.Label(main_frame, text="APC Target:").grid(row=row, column=0, sticky="w")
         self.apc = tk.StringVar(value="RuntimeBroker.exe")
-        apc_combo = ttk.Combobox(main_frame, textvariable=self.apc,
-                                 values=["RuntimeBroker.exe", "svchost.exe"],
-                                 state="normal", width=20)
-        apc_combo.grid(row=6, column=1, sticky="w")
+        ttk.Combobox(main_frame, textvariable=self.apc, values=["RuntimeBroker.exe", "svchost.exe"], width=25).grid(row=row, column=1, sticky="w")
+        row += 1
+
+        # ---------- Persistence ----------
+        ttk.Label(main_frame, text="Persistence:").grid(row=row, column=0, sticky="w")
+        self.persistence = tk.StringVar(value="none")
+        ttk.Combobox(main_frame, textvariable=self.persistence, values=["none", "reg", "task"], width=25, state="readonly").grid(row=row, column=1, sticky="w")
+        row += 1
 
         # ---------- Output name ----------
-        ttk.Label(main_frame, text="Output name (without extension):").grid(row=7, column=0, sticky="w")
+        ttk.Label(main_frame, text="Output name:").grid(row=row, column=0, sticky="w")
         self.output_name = tk.StringVar(value="afloader")
-        ttk.Entry(main_frame, textvariable=self.output_name).grid(row=7, column=1, sticky="w")
+        ttk.Entry(main_frame, textvariable=self.output_name, width=30).grid(row=row, column=1, sticky="w")
+        row += 1
 
-        # ---------- Delay ----------
-        ttk.Label(main_frame, text="Delay before injection (seconds):").grid(row=8, column=0, sticky="w")
+        # ---------- Delay & Spawn ----------
+        ttk.Label(main_frame, text="Delay (sec):").grid(row=row, column=0, sticky="w")
         self.delay = tk.StringVar(value="0")
-        ttk.Entry(main_frame, textvariable=self.delay, width=10).grid(row=8, column=1, sticky="w")
+        ttk.Entry(main_frame, textvariable=self.delay, width=10).grid(row=row, column=1, sticky="w")
+        row += 1
 
-        # ---------- Spawn new process ----------
         self.spawn = tk.BooleanVar()
-        ttk.Checkbutton(main_frame, text="Spawn new process for injection", variable=self.spawn).grid(row=9, column=0, columnspan=2, sticky="w")
-
+        ttk.Checkbutton(main_frame, text="Spawn process", variable=self.spawn).grid(row=row, column=0, sticky="w")
         self.spawn_path = tk.StringVar(value="C:\\Windows\\System32\\notepad.exe")
-        ttk.Label(main_frame, text="Process path:").grid(row=10, column=0, sticky="w")
-        ttk.Entry(main_frame, textvariable=self.spawn_path, width=40).grid(row=10, column=1, sticky="w")
+        ttk.Label(main_frame, text="Spawn path:").grid(row=row, column=1, sticky="w")
+        ttk.Entry(main_frame, textvariable=self.spawn_path, width=40).grid(row=row, column=2, columnspan=2, sticky="ew")
+        row += 1
+
+        # ---------- Injection technique (NEW) ----------
+        ttk.Label(main_frame, text="Injection technique:").grid(row=row, column=0, sticky="w")
+        self.injection = tk.StringVar(value="apc")
+        ttk.Combobox(main_frame, textvariable=self.injection, values=["apc", "enumwindows"], width=25, state="readonly").grid(row=row, column=1, sticky="w")
+        row += 1
+
+        # ---------- Staggered persistence (NEW) ----------
+        self.staggered = tk.BooleanVar()
+        ttk.Checkbutton(main_frame, text="Staggered persistence (two-stage)", variable=self.staggered).grid(row=row, column=0, columnspan=4, sticky="w")
+        row += 1
 
         # ---------- Code signing ----------
         signing_frame = ttk.LabelFrame(main_frame, text="Code Signing")
-        signing_frame.grid(row=11, column=0, columnspan=3, sticky="ew", pady=5)
-
-        ttk.Label(signing_frame, text="Certificate source:").grid(row=0, column=0, sticky="w")
+        signing_frame.grid(row=row, column=0, columnspan=4, sticky="ew", pady=8)
+        signing_row = 0
+        ttk.Label(signing_frame, text="Cert:").grid(row=signing_row, column=0, sticky="w")
         self.cert_source = tk.StringVar(value="none")
-        cert_combo = ttk.Combobox(signing_frame, textvariable=self.cert_source,
-                                  values=["none", "custom"],
-                                  state="readonly", width=20)
-        cert_combo.grid(row=0, column=1, sticky="w", padx=5)
-        cert_combo.bind("<<ComboboxSelected>>", self.on_cert_source_change)
-
+        ttk.Combobox(signing_frame, textvariable=self.cert_source, values=["none", "custom"], width=15, state="readonly").grid(row=signing_row, column=1, sticky="w")
+        signing_row += 1
         self.pfx_path = tk.StringVar()
         self.pfx_pass = tk.StringVar()
-        ttk.Label(signing_frame, text="PFX file:").grid(row=1, column=0, sticky="w")
-        self.pfx_entry = ttk.Entry(signing_frame, textvariable=self.pfx_path, width=50)
-        self.pfx_entry.grid(row=1, column=1, padx=5, pady=2)
-        self.pfx_browse = ttk.Button(signing_frame, text="Browse", command=self.browse_pfx)
-        self.pfx_browse.grid(row=1, column=2)
-
-        ttk.Label(signing_frame, text="Password:").grid(row=2, column=0, sticky="w")
-        self.pass_entry = ttk.Entry(signing_frame, textvariable=self.pfx_pass, show="*", width=30)
-        self.pass_entry.grid(row=2, column=1, sticky="w", padx=5)
-
-        # Initially disable PFX fields until a signing option is selected
-        self.pfx_entry.config(state="disabled")
-        self.pfx_browse.config(state="disabled")
-        self.pass_entry.config(state="disabled")
+        ttk.Label(signing_frame, text="PFX:").grid(row=signing_row, column=0, sticky="w")
+        ttk.Entry(signing_frame, textvariable=self.pfx_path, width=50).grid(row=signing_row, column=1, padx=5)
+        ttk.Button(signing_frame, text="Browse", command=self.browse_pfx).grid(row=signing_row, column=2)
+        signing_row += 1
+        ttk.Label(signing_frame, text="Pass:").grid(row=signing_row, column=0, sticky="w")
+        ttk.Entry(signing_frame, textvariable=self.pfx_pass, show="*", width=30).grid(row=signing_row, column=1, sticky="w")
+        row += 1
 
         # ---------- Generate button ----------
-        self.gen_button = ttk.Button(main_frame, text="Generate Loader", command=self.generate)
-        self.gen_button.grid(row=12, column=0, columnspan=3, pady=10)
+        self.gen_button = ttk.Button(main_frame, text="GENERATE LOADER", command=self.generate)
+        self.gen_button.grid(row=row, column=0, columnspan=4, pady=15)
+        row += 1
 
         # ---------- Output text area ----------
-        ttk.Label(main_frame, text="Output:").grid(row=13, column=0, sticky="w")
-        self.output_text = ScrolledText(main_frame, height=15, width=80)
-        self.output_text.grid(row=14, column=0, columnspan=3, sticky="nsew")
+        ttk.Label(main_frame, text="Output:").grid(row=row, column=0, sticky="w")
+        self.output_text = ScrolledText(main_frame, height=18)
+        self.output_text.grid(row=row+1, column=0, columnspan=4, sticky="nsew")
 
         # Configure resizing
         main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(14, weight=1)
+        main_frame.rowconfigure(row+1, weight=1)
 
-        # Bind mode change to show/hide staged frame
-        self.mode.trace_add("write", self.toggle_staged_frame)
+        self.mode.trace_add("write", self.toggle_staged)
 
     def browse_shellcode(self):
-        filename = filedialog.askopenfilename(title="Select raw shellcode file", filetypes=[("Binary files", "*.bin"), ("All files", "*.*")])
-        if filename:
-            self.shellcode_path.set(filename)
+        f = filedialog.askopenfilename(filetypes=[("Bin", "*.bin"), ("All", "*.*")])
+        if f:
+            self.shellcode_path.set(f)
 
     def browse_pfx(self):
-        filename = filedialog.askopenfilename(title="Select PFX certificate", filetypes=[("PFX files", "*.pfx"), ("All files", "*.*")])
-        if filename:
-            self.pfx_path.set(filename)
+        f = filedialog.askopenfilename(filetypes=[("PFX", "*.pfx")])
+        if f:
+            self.pfx_path.set(f)
 
-    def on_cert_source_change(self, event=None):
-        src = self.cert_source.get()
-        if src == "none":
-            self.pfx_entry.config(state="disabled")
-            self.pfx_browse.config(state="disabled")
-            self.pass_entry.config(state="disabled")
-            self.pfx_path.set("")
-            self.pfx_pass.set("")
-        elif src == "custom":
-            self.pfx_entry.config(state="normal")
-            self.pfx_browse.config(state="normal")
-            self.pass_entry.config(state="normal")
-            self.pfx_path.set("")
-            self.pfx_pass.set("")
-
-    def toggle_staged_frame(self, *args):
+    def toggle_staged(self, *args):
         if self.mode.get() == "staged":
             self.staged_frame.grid()
         else:
             self.staged_frame.grid_remove()
 
     def generate(self):
-        # Basic validation
         if not self.shellcode_path.get():
-            messagebox.showerror("Error", "Please select a shellcode file.")
+            messagebox.showerror("Error", "Select shellcode!")
             return
-        if self.mode.get() == "staged":
-            if not self.ip.get() or not self.port.get() or not self.path.get():
-                messagebox.showerror("Error", "Please fill in IP, port, and path for staged mode.")
-                return
-            try:
-                int(self.port.get())
-            except ValueError:
-                messagebox.showerror("Error", "Port must be a number.")
-                return
-
-        # Validate delay (must be integer >= 0)
-        try:
-            delay_val = int(self.delay.get())
-            if delay_val < 0:
-                raise ValueError
-        except ValueError:
-            messagebox.showerror("Error", "Delay must be a non‑negative integer.")
-            return
-
-        # Validate spawn path if spawn is enabled
-        if self.spawn.get():
-            spawn_path = self.spawn_path.get().strip()
-            if not spawn_path:
-                messagebox.showerror("Error", "Please specify a process path for spawn injection.")
-                return
-            # Optional: check that it's a valid path (not empty)
-
-        # Check signing
-        src = self.cert_source.get()
-        if src != "none":
-            if not self.pfx_path.get():
-                messagebox.showerror("Error", "No PFX file selected for signing.")
-                return
-            if not self.pfx_pass.get():
-                messagebox.showerror("Error", "Password is required for signing.")
-                return
-            if not os.path.exists(self.pfx_path.get()):
-                messagebox.showerror("Error", f"PFX file not found: {self.pfx_path.get()}")
-                return
-
-        # Disable button while running
         self.gen_button.config(state="disabled")
         self.output_text.delete(1.0, tk.END)
-
-        # Run in a separate thread
         threading.Thread(target=self.run_backend, daemon=True).start()
 
     def run_backend(self):
         try:
-            # Build command line
-            cmd = [sys.executable, self.backend, self.mode.get(),
+            backend_abs = os.path.abspath(self.backend)
+            backend_dir = os.path.dirname(backend_abs)
+            backend_script = os.path.basename(backend_abs)
+
+            cmd = [sys.executable, backend_script, self.mode.get(),
                    "-p", self.shellcode_path.get(),
                    "-f", self.format.get(),
                    "-apc", self.apc.get(),
@@ -244,48 +198,46 @@ class AnneFrankGUI:
                 cmd.append("-e")
             if self.scramble.get():
                 cmd.append("-s")
-
-            # Add delay if non-zero
-            delay_val = int(self.delay.get())
-            if delay_val > 0:
-                cmd.extend(["--delay", str(delay_val)])
-
-            # Add spawn arguments if enabled
+            if self.persistence.get() != "none":
+                cmd.extend(["--persistence", self.persistence.get()])
+            if int(self.delay.get()) > 0:
+                cmd.extend(["--delay", self.delay.get()])
             if self.spawn.get():
                 cmd.append("--spawn")
-                spawn_path = self.spawn_path.get().strip()
-                if spawn_path:
-                    cmd.extend(["--spawn-path", spawn_path])
+                cmd.extend(["--spawn-path", self.spawn_path.get()])
+            # NEW: injection technique
+            if self.injection.get() != "apc":
+                cmd.extend(["--injection", self.injection.get()])
+            # NEW: staggered persistence
+            if self.staggered.get():
+                cmd.append("--staggered")
 
-            src = self.cert_source.get()
-            if src != "none":
+            if self.cert_source.get() != "none" and self.pfx_path.get():
                 cmd.extend(["-pfx", self.pfx_path.get()])
                 if self.pfx_pass.get():
                     cmd.extend(["-pfx-pass", self.pfx_pass.get()])
 
             if self.mode.get() == "staged":
-                cmd.extend(["-i", self.ip.get(),
-                            "-po", self.port.get(),
-                            "-pa", self.path.get()])
+                cmd.extend(["-i", self.ip.get(), "-po", self.port.get(), "-pa", self.path.get()])
 
-            # Run the subprocess
-            self.output_text.insert(tk.END, " ".join(cmd) + "\n" + "="*50 + "\n")
-            self.output_text.see(tk.END)
+            self.output_text.insert(tk.END, " ".join(cmd) + "\n" + "="*70 + "\n")
             self.root.update_idletasks()
 
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    text=True, bufsize=1, cwd=backend_dir)
+
             for line in proc.stdout:
                 self.output_text.insert(tk.END, line)
                 self.output_text.see(tk.END)
                 self.root.update_idletasks()
-            proc.wait()
 
+            proc.wait()
             if proc.returncode == 0:
-                messagebox.showinfo("Success", f"Loader generated as {self.output_name.get()}.{self.format.get().lower()}")
+                messagebox.showinfo("Success", f"Done → {self.output_name.get()}.{self.format.get().lower()}")
             else:
-                messagebox.showerror("Error", "Compilation failed. See output for details.")
+                messagebox.showerror("Failed", "See output above")
         except Exception as e:
-            self.output_text.insert(tk.END, f"Error: {e}\n")
+            self.output_text.insert(tk.END, f"ERROR: {e}\n")
             messagebox.showerror("Error", str(e))
         finally:
             self.gen_button.config(state="normal")
